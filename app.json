@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Spendie_App",
+    "slug": "Spendie_App",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/pwa-512x512.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/pwa-512x512.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#7c3aed"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/pwa-512x512.png",
+        "backgroundColor": "#7c3aed"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/pwa-192x192.png",
+      "name": "Spendie",
+      "shortName": "Spendie",
+      "description": "Track, share, and plan your money together.",
+      "themeColor": "#7c3aed",
+      "backgroundColor": "#7c3aed",
+      "display": "standalone",
+      "orientation": "portrait",
+      "lang": "en"
+    }
+  }
+}
