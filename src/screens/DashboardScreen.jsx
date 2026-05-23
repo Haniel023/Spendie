@@ -689,7 +689,7 @@ export default function DashboardScreen() {
     if (editingTransaction) {
       // Editing always requires online (we have an ID)
       const { error } = await supabase.from('transactions').update({
-        type: transactionForm.type, amount: Number(transactionForm.amount),
+        type: transactionForm.type, amount: parseFloat(String(transactionForm.amount).replace(/,/g, '')) || 0,
         category: transactionForm.category, description: transactionForm.description,
         emoji: transactionForm.emoji || null,
       }).eq('id', editingTransaction.id);
@@ -697,7 +697,7 @@ export default function DashboardScreen() {
     } else {
       const payload = {
         space_id: activeSpace.id, created_by: user.id,
-        type: transactionForm.type, amount: Number(transactionForm.amount),
+        type: transactionForm.type, amount: parseFloat(String(transactionForm.amount).replace(/,/g, '')) || 0,
         category: transactionForm.category, description: transactionForm.description,
         emoji: transactionForm.emoji || null,
         created_at: getPHNowISO(), // explicit PH-time ISO timestamp
@@ -737,7 +737,7 @@ export default function DashboardScreen() {
       if (comment) setTimeout(() => setCoachComment(comment), 400);
 
       // ── Push notification triggers ──────────────────────────────────────
-      const txAmount = Number(savedForm.amount);
+      const txAmount = parseFloat(String(savedForm.amount).replace(/,/g, '')) || 0;
       const isExpense = savedForm.type === 'expense';
       const isIncome  = savedForm.type === 'income';
 
@@ -844,7 +844,7 @@ export default function DashboardScreen() {
   };
 
   const handleCreateBudget = async () => {
-    const payload = { space_id: activeSpace.id, title: budgetForm.title, category: budgetForm.category, monthly_limit: Number(budgetForm.monthly_limit) };
+    const payload = { space_id: activeSpace.id, title: budgetForm.title, category: budgetForm.category, monthly_limit: parseFloat(String(budgetForm.monthly_limit).replace(/,/g, '')) || 0 };
     if (editingBudget) {
       const { error } = await supabase.from('budgets').update(payload).eq('id', editingBudget.id);
       if (error) { console.error(error); return; }
@@ -874,8 +874,8 @@ export default function DashboardScreen() {
   const handleCreateGoal = async () => {
     const payload = {
       space_id: activeSpace.id, title: goalForm.title,
-      target_amount: Number(goalForm.target_amount),
-      current_amount: Number(goalForm.current_amount || 0),
+      target_amount: parseFloat(String(goalForm.target_amount).replace(/,/g, '')) || 0,
+      current_amount: parseFloat(String(goalForm.current_amount || '0').replace(/,/g, '')) || 0,
       deadline: goalForm.deadline || null,
       emoji: goalForm.emoji || null,
     };
@@ -942,7 +942,7 @@ export default function DashboardScreen() {
     const nextRun = computeNextRun(recurringForm);
     const { error } = await supabase.from('recurring_transactions').insert([{
       space_id: activeSpace.id, created_by: user.id,
-      type: recurringForm.type, amount: Number(recurringForm.amount),
+      type: recurringForm.type, amount: parseFloat(String(recurringForm.amount).replace(/,/g, '')) || 0,
       category: recurringForm.category, description: recurringForm.description,
       emoji: recurringForm.emoji || null,
       frequency: recurringForm.frequency, next_run: nextRun,
@@ -988,7 +988,7 @@ export default function DashboardScreen() {
       .from('recurring_transactions')
       .update({
         type:              recurringForm.type,
-        amount:            Number(recurringForm.amount),
+        amount:            parseFloat(String(recurringForm.amount).replace(/,/g, '')) || 0,
         category:          recurringForm.category,
         description:       recurringForm.description,
         emoji:             recurringForm.emoji || null,
@@ -1030,7 +1030,7 @@ export default function DashboardScreen() {
       space_id: activeSpace.id,
       created_by: user.id,
       name: billForm.name,
-      amount: Number(billForm.amount) || 0,
+      amount: parseFloat(String(billForm.amount).replace(/,/g, '')) || 0,
       category: billForm.category || 'Bills',
       due_date: billForm.due_date,
       is_paid: false,
