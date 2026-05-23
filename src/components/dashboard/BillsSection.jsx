@@ -49,37 +49,40 @@ export default function BillsSection({ bills = [], onAdd, onEdit, onDelete, onMa
   const unpaidTotal = [...overdue, ...upcoming].reduce((s, b) => s + Number(b.amount), 0);
 
   const renderBillItem = (bill) => {
-    const catIcon = categoryConfig[bill.category]?.icon || '📄';
+    const catIcon  = categoryConfig[bill.category]?.icon  || '📄';
     const catColor = categoryConfig[bill.category]?.color || colors.warning;
     const { label, color, bg } = getDueLabelAndStatus(bill.due_date, bill.is_paid);
 
     return (
       <View key={bill.id} style={styles.billItem}>
-        <View style={[styles.billIcon, { backgroundColor: catColor + '22' }]}>
-          <Text style={styles.billIconText}>{bill.emoji || catIcon}</Text>
-        </View>
-        <View style={styles.billInfo}>
-          <Text style={styles.billName}>{bill.name}</Text>
-          <Text style={styles.billCategory}>{bill.category}</Text>
-        </View>
-        <View style={styles.billRight}>
+        {/* ── Row 1: icon · name · amount ── */}
+        <View style={styles.billRow1}>
+          <View style={[styles.billIcon, { backgroundColor: catColor + '22' }]}>
+            <Text style={styles.billIconText}>{bill.emoji || catIcon}</Text>
+          </View>
+          <View style={styles.billInfo}>
+            <Text style={styles.billName} numberOfLines={1}>{bill.name}</Text>
+            <Text style={styles.billCategory}>{bill.category}</Text>
+          </View>
           <Text style={styles.billAmount}>₱{Number(bill.amount).toFixed(2)}</Text>
+        </View>
+
+        {/* ── Row 2: due badge · actions ── */}
+        <View style={styles.billRow2}>
           <View style={[styles.dueBadge, { backgroundColor: bg }]}>
             <Text style={[styles.dueText, { color }]}>{label}</Text>
           </View>
           <View style={styles.billActions}>
             {!bill.is_paid && (
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.successLight }]}
+                style={styles.paidBtn}
                 onPress={() => onMarkPaid(bill.id)}
               >
                 <CheckCircle size={14} color={colors.success} />
+                <Text style={styles.paidBtnText}>Mark Paid</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.editBtn]}
-              onPress={() => onEdit(bill)}
-            >
+            <TouchableOpacity style={styles.editBtn} onPress={() => onEdit(bill)}>
               <Pencil size={13} color={colors.primary} />
               <Text style={styles.editBtnText}>Edit</Text>
             </TouchableOpacity>
@@ -237,24 +240,47 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 13, fontWeight: '700' },
 
   billItem: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: spacing.sm,
+  },
+
+  // Row 1 — icon · name · amount
+  billRow1: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
-  billIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  billIconText: { fontSize: 19 },
+  billIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  billIconText: { fontSize: 20 },
   billInfo: { flex: 1 },
   billName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  billCategory: { fontSize: 11, color: colors.textMuted },
-  billRight: { alignItems: 'flex-end', gap: 3 },
-  billAmount: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  dueBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  dueText: { fontSize: 10, fontWeight: '700' },
-  billActions: { flexDirection: 'row', gap: 4 },
-  actionBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
+  billCategory: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  billAmount: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, flexShrink: 0 },
+
+  // Row 2 — due badge · action buttons
+  billRow2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 52, // align with text (icon width 40 + gap 12)
+  },
+  dueBadge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.full },
+  dueText: { fontSize: 11, fontWeight: '700' },
+  billActions: { flexDirection: 'row', gap: spacing.xs },
+
+  paidBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.successLight,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  paidBtnText: { fontSize: 12, fontWeight: '600', color: colors.success },
+
   editBtn: {
     flexDirection: 'row',
     alignItems: 'center',
