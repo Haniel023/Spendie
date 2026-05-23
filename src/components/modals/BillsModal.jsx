@@ -1,24 +1,149 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Modal, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, Switch,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { Receipt } from 'lucide-react-native';
+import { Receipt, ChevronLeft, ChevronRight, Calendar, Pencil } from 'lucide-react-native';
 import { colors, spacing, radius } from '../../lib/theme';
 import { categoryConfig, BILL_CATEGORIES } from '../../lib/categoryConfig';
+import { getPHNow } from '../../lib/timezone';
 
 const ALL_CATEGORIES = Object.keys(categoryConfig);
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAYS_HDR = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
-export default function BillsModal({ visible, billForm, setBillForm, editingBill, onSubmit, onClose, onDelete }) {
-  const applyPreset = (preset) => {
-    setBillForm({
-      ...billForm,
-      name: preset.label,
-      emoji: preset.emoji,
-      category: preset.category,
-    });
+function ordinal(n) {
+  if (n >= 11 && n <= 13) return 'th';
+  switch (n % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; }
+}
+
+function buildCells(year, month) {
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  return cells;
+}
+
+// ── Inline calendar picker ────────────────────────────────────────────────────
+function InlineDatePicker({ value, onChange, onClose }) {
+  const ph = getPHNow();
+
+  // Seed from existing value, fallback to PH today
+  const seed = value ? new Date(value + 'T00:00:00') : ph;
+  const [pMonth, setPMonth] = useState(seed.getMonth());
+  const [pYear,  setPYear]  = useState(seed.getFullYear());
+
+  const selectedDay   = value ? new Date(value + 'T00:00:00').getDate()     : null;
+  const selectedMonth = value ? new Date(value + 'T00:00:00').getMonth()    : null;
+  const selectedYear  = value ? new Date(value + 'T00:00:00').getFullYear() : null;
+
+  const todayDay   = ph.getDate();
+  const todayMonth = ph.getMonth();
+  const todayYear  = ph.getFullYear();
+
+  const goPrev = () => {
+    if (pMonth === 0) { setPMonth(11); setPYear(y => y - 1); }
+    else setPMonth(m => m - 1);
   };
+  const goNext = () => {
+    if (pMonth === 11) { setPMonth(0); setPYear(y => y + 1); }
+    else setPMonth(m => m + 1);
+  };
+
+  const handleSelect = (day) => {
+    const m = String(pMonth + 1).padStart(2, '0');
+    const d = String(day).padStart(2, '0');
+    onChange(`${pYear}-${m}-${d}`);
+    onClose();
+  };
+
+  const cells = buildCells(pYear, pMonth);
+  const isSelectedMonth = pMonth === selectedMonth && pYear === selectedYear;
+  const isTodayMonth    = pMonth === todayMonth    && pYear === todayYear;
+
+  return (
+    <View style={picker.wrap}>
+      {/* Month / Year nav */}
+      <View style={picker.nav}>
+        <TouchableOpacity onPress={goPrev} style={picker.navBtn}>
+          <ChevronLeft size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
+        <Text style={picker.navTitle}>{MONTHS[pMonth]} {pYear}</Text>
+        <TouchableOpacity onPress={goNext} style={picker.navBtn}>
+          <ChevronRight size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Day-of-week headers */}
+      <View style={picker.weekRow}>
+        {DAYS_HDR.map(d => (
+          <Text key={d} style={picker.weekDay}>{d}</Text>
+        ))}
+      </View>
+
+      {/* Grid */}
+      <View style={picker.grid}>
+        {cells.map((day, idx) => {
+          if (!day) return <View key={`e-${idx}`} style={picker.cell} />;
+          const isSelected = isSelectedMonth && day === selectedDay;
+          const isToday    = isTodayMonth    && day === todayDay;
+          return (
+            <TouchableOpacity
+              key={day}
+              style={[
+                picker.cell,
+                isSelected && picker.cellSelected,
+                !isSelected && isToday && picker.cellToday,
+              ]}
+              onPress={() => handleSelect(day)}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                picker.cellText,
+                isSelected && picker.cellTextSelected,
+                !isSelected && isToday && picker.cellTextToday,
+              ]}>
+                {day}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ── Main modal ────────────────────────────────────────────────────────────────
+export default function BillsModal({ visible, billForm, setBillForm, editingBill, onSubmit, onClose, onDelete }) {
+  const [showPicker, setShowPicker] = useState(false);
+  const [typeMode,   setTypeMode]   = useState(false);  // fallback text input
+
+  // Close picker when modal closes
+  useEffect(() => {
+    if (!visible) { setShowPicker(false); setTypeMode(false); }
+  }, [visible]);
+
+  // When switching to type mode, pre-fill with current value
+  const handleTypeChange = (v) => {
+    setBillForm({ ...billForm, due_date: v });
+  };
+
+  const applyPreset = (preset) => {
+    setBillForm({ ...billForm, name: preset.label, emoji: preset.emoji, category: preset.category });
+  };
+
+  // Parsed display
+  const parsed = billForm.due_date && /^\d{4}-\d{2}-\d{2}$/.test(billForm.due_date)
+    ? new Date(billForm.due_date + 'T00:00:00')
+    : null;
+  const displayDate = parsed
+    ? parsed.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })
+    : null;
+  const dayOfMonth = parsed ? parsed.getDate() : null;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -35,6 +160,7 @@ export default function BillsModal({ visible, billForm, setBillForm, editingBill
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
             {/* Bill presets */}
             {!editingBill && (
               <>
@@ -43,10 +169,7 @@ export default function BillsModal({ visible, billForm, setBillForm, editingBill
                   {BILL_CATEGORIES.map((preset) => (
                     <TouchableOpacity
                       key={preset.label}
-                      style={[
-                        styles.presetChip,
-                        billForm.name === preset.label && styles.presetChipActive,
-                      ]}
+                      style={[styles.presetChip, billForm.name === preset.label && styles.presetChipActive]}
                       onPress={() => applyPreset(preset)}
                     >
                       <Text style={styles.presetEmoji}>{preset.emoji}</Text>
@@ -78,14 +201,63 @@ export default function BillsModal({ visible, billForm, setBillForm, editingBill
               keyboardType="numeric"
             />
 
-            <Text style={styles.label}>Due Date</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
-              value={billForm.due_date}
-              onChangeText={(v) => setBillForm({ ...billForm, due_date: v })}
-            />
+            {/* ── Due Date ── */}
+            <View style={styles.dueLabelRow}>
+              <Text style={styles.label}>Due Date</Text>
+              <TouchableOpacity onPress={() => { setTypeMode(t => !t); setShowPicker(false); }}>
+                <Text style={styles.switchMode}>
+                  {typeMode ? '📅 Pick from calendar' : '⌨️ Type date'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {typeMode ? (
+              /* Text input fallback */
+              <TextInput
+                style={styles.input}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.textMuted}
+                value={billForm.due_date}
+                onChangeText={handleTypeChange}
+                keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
+                autoFocus
+              />
+            ) : (
+              /* Date display button */
+              <TouchableOpacity
+                style={[styles.dateBtn, showPicker && styles.dateBtnActive]}
+                onPress={() => setShowPicker(p => !p)}
+                activeOpacity={0.8}
+              >
+                <Calendar size={16} color={displayDate ? colors.warning : colors.textMuted} />
+                <Text style={[styles.dateBtnText, !displayDate && styles.dateBtnPlaceholder]}>
+                  {displayDate || 'Tap to select a date'}
+                </Text>
+                <ChevronRight
+                  size={14}
+                  color={colors.textMuted}
+                  style={{ transform: [{ rotate: showPicker ? '90deg' : '0deg' }] }}
+                />
+              </TouchableOpacity>
+            )}
+
+            {/* Inline calendar */}
+            {!typeMode && showPicker && (
+              <InlineDatePicker
+                value={billForm.due_date}
+                onChange={(v) => setBillForm({ ...billForm, due_date: v })}
+                onClose={() => setShowPicker(false)}
+              />
+            )}
+
+            {/* Recurring day-of-month hint */}
+            {billForm.is_recurring && dayOfMonth && (
+              <View style={styles.recurringHint}>
+                <Text style={styles.recurringHintText}>
+                  🔁 Repeats on the <Text style={styles.recurringHintBold}>{dayOfMonth}{ordinal(dayOfMonth)}</Text> of every month
+                </Text>
+              </View>
+            )}
 
             <Text style={styles.label}>Category</Text>
             <View style={styles.pickerBox}>
@@ -103,7 +275,7 @@ export default function BillsModal({ visible, billForm, setBillForm, editingBill
             <View style={styles.toggleRow}>
               <View>
                 <Text style={styles.toggleLabel}>Recurring Bill</Text>
-                <Text style={styles.toggleSubLabel}>Auto-repeats every month</Text>
+                <Text style={styles.toggleSubLabel}>Auto-repeats on a schedule</Text>
               </View>
               <Switch
                 value={billForm.is_recurring}
@@ -171,6 +343,48 @@ export default function BillsModal({ visible, billForm, setBillForm, editingBill
   );
 }
 
+// ── Picker styles ─────────────────────────────────────────────────────────────
+const picker = StyleSheet.create({
+  wrap: {
+    borderWidth: 1.5,
+    borderColor: colors.warning,
+    borderRadius: radius.lg,
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  nav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  navBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  navTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  weekRow: { flexDirection: 'row', marginBottom: 4 },
+  weekDay: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: colors.textMuted },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  cell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm,
+    marginVertical: 2,
+  },
+  cellSelected: { backgroundColor: colors.warning },
+  cellToday: { borderWidth: 1.5, borderColor: colors.warning },
+  cellText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
+  cellTextSelected: { color: colors.white, fontWeight: '800' },
+  cellTextToday: { color: colors.warning, fontWeight: '700' },
+});
+
+// ── Modal styles ──────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
@@ -186,13 +400,49 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
 
   label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.xs },
+  dueLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs },
+  switchMode: { fontSize: 12, fontWeight: '600', color: colors.warning },
+
   input: {
     borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md,
     paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15,
     color: colors.textPrimary, backgroundColor: colors.background, marginBottom: spacing.md,
   },
   textarea: { height: 80, textAlignVertical: 'top' },
-  pickerBox: { borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md, marginBottom: spacing.md, backgroundColor: colors.background, overflow: 'hidden' },
+  pickerBox: {
+    borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md,
+    marginBottom: spacing.md, backgroundColor: colors.background, overflow: 'hidden',
+  },
+
+  // Date button
+  dateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 13,
+    backgroundColor: colors.background,
+    marginBottom: spacing.sm,
+  },
+  dateBtnActive: { borderColor: colors.warning, backgroundColor: colors.warningLight },
+  dateBtnText: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  dateBtnPlaceholder: { color: colors.textMuted, fontWeight: '400' },
+
+  // Recurring hint
+  recurringHint: {
+    backgroundColor: colors.warningLight,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning,
+  },
+  recurringHintText: { fontSize: 13, color: colors.textSecondary },
+  recurringHintBold: { fontWeight: '700', color: colors.warning },
 
   presetScroll: { marginBottom: spacing.md },
   presetChip: {
