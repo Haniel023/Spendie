@@ -302,6 +302,51 @@ const ZERO_BALANCE = {
   },
 };
 
+// ── Inactivity Messages (2+ days without any log) ─────────────────────────────
+
+const INACTIVITY_MESSAGES = {
+  supportive: [
+    { title: '💛 We miss you!', body: "Hey! It's been 2+ days since your last log. No pressure — just a gentle nudge. Every peso tracked is a step forward. You've got this! 🤗" },
+    { title: '📒 Quick check-in?', body: '2 days logged-free. That happens! Come back and log — even small entries keep your financial story going. You can do it! 💪' },
+    { title: '🌱 Keep growing!', body: "Your money journey paused for a couple of days. That's totally okay! Log today and keep building that habit. Small steps matter. 🌟" },
+  ],
+  strict: [
+    { title: '⚔️ 2 Days. No Logs.', body: 'Your budget has been operating blind. Every unlogged peso is a gap in your financial intelligence. Open the app. Log now.' },
+    { title: '🚨 Discipline Check', body: '48 hours of silence from your tracker. This is exactly how budgets fall apart. Log your spending immediately.' },
+    { title: '⚔️ Accountability Time', body: "You've been away for 2 days. Your financial plan doesn't pause because you did. Get back on track. Now." },
+  ],
+  roast: [
+    { title: '🎤 Caught You Slacking', body: "2 days, no logs. Bestie, your money is literally out there unsupervised. Like a toddler loose in a mall. Good luck. 💅" },
+    { title: '👀 The Audacity', body: "2 whole days of financial ghosting. Your budget is in the comments section asking where you went. 😭" },
+    { title: '🎤 Missing: 1 User', body: 'Last seen: 2 days ago. Spending has been unmonitored since. Somewhere, an impulse buy is celebrating. 🛍️' },
+  ],
+  analyst: [
+    { title: '📊 Logging Gap Detected', body: 'Alert: 48+ hour data gap in your financial records. Current period reporting accuracy: compromised. Log now to restore data integrity.' },
+    { title: '📈 Data Continuity Issue', body: 'Your transaction log has a 2-day gap. This impacts monthly trend accuracy and budget variance calculations. Immediate re-entry recommended.' },
+    { title: '📊 Portfolio Alert', body: 'Unlogged expenditures detected across 48+ hours. This distorts your spending KPIs. Please resume logging to maintain analytical integrity.' },
+  ],
+  anime: [
+    { title: '⚡ YOUR POWER IS FADING!', body: '2 days have passed and your financial aura weakens!! The path to financial freedom does not wait! Return and LOG YOUR EXPENSES! 🔥' },
+    { title: '🔥 The Journey Calls You Back!', body: 'A true hero never abandons their mission! 2 days without logging — your wallet needs you, senpai!! Come back stronger!! ✨' },
+    { title: '⚡ WAKE UP, WARRIOR!', body: 'Your final form cannot be achieved without discipline! 2 days of inactivity detected! Log now and RECLAIM YOUR POWER!! 💥' },
+  ],
+  minimal: [
+    { title: '🍃 2 days since last log.', body: 'Log when ready.' },
+    { title: '📝 No entries in 2 days.', body: 'Take a moment to catch up.' },
+    { title: '🍃 Logging gap: 2 days.', body: 'One entry is enough.' },
+  ],
+};
+
+/**
+ * Returns a random inactivity nudge message for the given coach personality.
+ * @param {string} personality
+ * @returns {{ title: string, body: string }}
+ */
+export function generateInactivityMessage(personality = 'supportive') {
+  const msgs = INACTIVITY_MESSAGES[personality] ?? INACTIVITY_MESSAGES.supportive;
+  return msgs[Math.floor(Math.random() * msgs.length)];
+}
+
 // ── Main Generator ─────────────────────────────────────────────────────────────
 
 /**

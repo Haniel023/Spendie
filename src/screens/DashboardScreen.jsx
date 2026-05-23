@@ -52,7 +52,7 @@ import RegretSection from '../components/dashboard/RegretSection';
 import AnnualWrapped from '../components/dashboard/AnnualWrapped';
 import SettingsModal from '../components/dashboard/SettingsModal';
 
-import { generateTransactionComment, generatePlanInsight, generatePlanItemComment, generateCoachComment } from '../lib/coachEngine';
+import { generateTransactionComment, generatePlanInsight, generatePlanItemComment, generateCoachComment, generateInactivityMessage } from '../lib/coachEngine';
 import { computeSpendingPersonality } from '../lib/spendingPersonality';
 import {
   notifyBudgetExceeded,
@@ -60,7 +60,9 @@ import {
   notifyPayday,
   scheduleBillReminder,
   cancelNotification,
+  sendImmediateNotification,
 } from '../lib/pushNotifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import ConfirmModal from '../components/common/ConfirmModal';
 import TransactionModal from '../components/modals/TransactionModal';
@@ -585,6 +587,34 @@ export default function DashboardScreen() {
           setPaydayAmount(Number(recentIncome.amount));
           setPaydayVisible(true);
         }, 800); // slight delay so UI settles first
+      }
+    }
+
+    // ── Inactivity nudge ──────────────────────────────────────────────────────
+    // Fire a personality-based notification if no transaction logged in 2+ days.
+    // Throttled to once per calendar day so it doesn't repeat on every app open.
+    if (data.length > 0) {
+      const lastTx = data[0]; // already sorted desc
+      const lastDate = toPHDate(lastTx.created_at);
+      const now = getPHNow();
+      const diffDays = (now - lastDate) / (1000 * 60 * 60 * 24);
+
+      if (diffDays >= 2) {
+        const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const INACTIVITY_KEY = '@spendie_inactivity_notif_date';
+        try {
+          const lastSent = await AsyncStorage.getItem(INACTIVITY_KEY);
+          if (lastSent !== todayKey) {
+            const msg = generateInactivityMessage(coachPersonality);
+            sendImmediateNotification({
+              title: msg.title,
+              body: msg.body,
+              channel: 'insights',
+              data: { type: 'inactivity' },
+            }).catch(() => {});
+            await AsyncStorage.setItem(INACTIVITY_KEY, todayKey);
+          }
+        } catch {}
       }
     }
   };
