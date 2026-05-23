@@ -106,15 +106,10 @@ Whether you're budgeting solo or managing finances with a partner, Spendie keeps
 
 ---
 
-## 🆕 What's New — Latest Update
+## 🆕 Major Updates
 
-### 🤗 AI Coach — Personality-Aware Everything
-The AI Coach now adapts its tone across **every surface** it appears on:
-
-- **Insights** — The "Coach Caught This" section generates messages specific to each of the 6 personalities (supportive, strict, roast, analyst, anime, minimal)
-- **Transaction comments** — Logging a transaction triggers a comment that's aware of the category, amount, time of day, and budget proximity
-- **Plan item comments** — Adding a budget, goal, bill, or recurring transaction generates a relevant, personality-matched coaching nudge
-- **Zero balance handling** — ₱0.00 balance mid-month is now specifically detected and addressed with a personality-appropriate response
+### 🤖 AI Financial Coach — 6 Personalities
+A full coaching layer that adapts its tone to how you want to be coached. Generates real-time commentary when you log transactions, set budgets, add goals, or hit ₱0 balance — all shaped by the personality you pick.
 
 | Personality | Vibe |
 |---|---|
@@ -125,99 +120,41 @@ The AI Coach now adapts its tone across **every surface** it appears on:
 | ⚡ Anime Mentor | Dramatic power-level energy |
 | 🍃 Calm Minimalist | Short, zen, distraction-free |
 
-### 🗓️ Recurring Transaction Day Picker
-Recurring transactions now let you specify the **exact schedule** — not just frequency:
-
-| Frequency | Picker |
-|---|---|
-| **Monthly** | Visual 31-day grid — tap the day of the month |
-| **Weekly** | 7-chip day-of-week selector (Sun–Sat) |
-| **Semi-monthly** | Two separate day pickers |
-
-The app computes the correct `next_run` date automatically and displays human-readable labels like "Every 15th", "Every Monday", "15th & 30th" in the recurring list.
-
 ### 🔔 Push Notifications
-Full local push notification system via `expo-notifications`:
+Local push notification system covering every important financial event:
 
 | Notification | Trigger |
 |---|---|
 | 📅 Bill Reminder | 3 days before due date |
 | 📝 Daily Logging Reminder | 8:00 PM every day |
 | 📊 Weekly Budget Check-In | Sunday 10:00 AM |
-| 🚨 Budget Exceeded | Immediately when a category limit is crossed |
-| ⚠️ Low Balance Alert | Immediately when balance drops below ₱1,000 |
-| 🎉 Payday Alert | Immediately on income ≥ ₱5,000 |
+| 🚨 Budget Exceeded | Category limit crossed |
+| ⚠️ Low Balance Alert | Balance drops below ₱1,000 |
+| 🎉 Payday Alert | Income ≥ ₱5,000 logged |
 
-Toggle the daily reminder and weekly check-in on/off in **Settings → Notifications**.
+### 🧾 Smart Bill & Subscription Auto-Detection
+When you log an expense, Spendie automatically checks if it matches an existing bill or subscription and prompts you to mark it as settled — no manual hunting required.
 
-### ✏️ Edit-Only UI (Delete Inside Modal)
-All list views now show only an **Edit** button. The **Delete** action lives inside the edit modal — reducing accidental deletions and keeping the UI clean. Applied across:
-- Transactions
-- Budgets
-- Goals
-- Bills
-- Recurring transactions
-
-### 🕐 Philippine Timezone — Fully Consistent
-All date bucketing, streak calculations, calendar dots, and time displays now explicitly use **Asia/Manila (UTC+8)** via the `timezone.js` utility — regardless of the user's device timezone. This ensures correct behavior for users on web or devices not set to PH time.
-
-### ⚙️ Settings Panel — Updated
-- **Notifications section** — Daily reminder + weekly budget check-in toggles
-- Removed redundant **Roast Mode** toggle (use the Coach Personality selector instead — pick 🎤 Roast Mode there)
-
----
-
-## 🆕 Previous Major Update
-
-### 💸 Payday Celebration
-Whenever a new income transaction is logged for today, a 24-particle confetti animation fires with a glowing banner — once per transaction, never repeats. Can be toggled off in Settings.
-
-### 🌫️ Focus Mode
-Tap the 👁️ eye icon on the Balance Card to blur all financial values. Great for screen-sharing, reducing anxiety, or just keeping things private in public. Persists across sessions.
+- **Bills** — matches by category, name, and amount → offers to mark as paid
+- **Subscriptions** — matches recurring subscriptions → offers to advance the next renewal date so it won't auto-charge again
 
 ### 🎬 Annual Wrapped
-A Spotify Wrapped-style 12-slide story of your full financial year — income, expenses, biggest purchase, best saving month, no-spend days, spending personality, and goal achievements. Supports multi-year history with a year chip picker. Each slide is shareable.
-
-### 😬 Regret Purchase Tracker
-Rate every expense as **👍 Worth It**, **😐 Neutral**, or **😬 Regret**. The app then generates:
-- Regret ratio percentage
-- Most-regretted category
-- Late-night spending pattern detection
-- Satisfaction insights ("Food brings you the most joy")
+A Spotify Wrapped-style 12-slide year-in-review — income, expenses, biggest purchase, best saving month, no-spend days, spending personality, and goals completed. Supports multi-year history with a year picker. Each slide is shareable.
 
 ### 🏅 Community Challenges
-Join 8 finance challenges and track auto-calculated progress:
+Join 8 finance challenges with auto-calculated progress: No Spend Week, ₱500 Saver Sprint, Coffee-Free Week, 7-Day Logging Streak, Full Month In-Budget, Emergency Fund Sprint, Cook It Week, and No Shopping Month.
 
-| Challenge | Goal | Difficulty |
-|---|---|---|
-| 🚫 No Spend Week | 7 no-expense days | Hard |
-| 💰 ₱500 Saver Sprint | Save ₱500 this month | Easy |
-| ☕ Coffee-Free Week | No café purchases for 7 days | Medium |
-| 📝 7-Day Logging Streak | Log daily for a week | Easy |
-| 🎯 Full Month In-Budget | Zero budget overruns | Hard |
-| 🛡️ Emergency Fund Sprint | Save ₱1,000 | Medium |
-| 🍱 Cook It Week | No food delivery for 7 days | Medium |
-| 🛍️ No Shopping Month | Zero shopping for 30 days | Expert |
+### 😬 Regret Purchase Tracker
+Rate every expense as 👍 Worth It, 😐 Neutral, or 😬 Regret. Generates a regret ratio, top regret category, late-night spending pattern detection, and satisfaction insights.
 
 ### 📸 Memory Cards
-Horizontal-scroll nostalgic financial flashbacks:
-- "One year ago today, you spent ₱X on..."
-- "Six months ago..." snapshots
-- First transaction milestones (30, 60, 90, 180, 365 days)
-- Year-over-year comparison ("You spent 23% LESS than last May!")
-- Best saving month in the past 12 months
+Nostalgic financial flashbacks — "One year ago today you spent ₱X on…", year-over-year comparisons, and first transaction milestones. Shown as a horizontal-scroll carousel.
 
-### 🌍 Seasonal Auto-Themes
-6 seasonal themes auto-activate based on Philippines calendar:
+### 💸 Payday Celebration
+24-particle confetti animation with a glowing banner fires automatically whenever an income transaction is logged. Once per transaction, never repeats.
 
-| Season | Window |
-|---|---|
-| 🎆 New Year | Jan 1–7 |
-| 💕 Valentine's | Feb 1–14 |
-| 🌅 Summer | Mar 15 – Jun 15 |
-| 🌧️ Rainy Day | Jun 16 – Sep 30 |
-| 🎃 Halloween | October |
-| 🎄 Christmas | Nov 25 – Jan 7 |
+### 🌍 14 Themes + Seasonal Auto-Themes
+8 standard themes plus 6 seasonal themes (Christmas, Halloween, Valentine's, Summer, Rainy Day, New Year) that auto-activate on Philippines calendar dates. Toggle auto-switching in Settings.
 
 ---
 
