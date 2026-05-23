@@ -71,6 +71,95 @@ import InviteModal from '../components/modals/InviteModal';
 import RecurringModal from '../components/modals/RecurringModal';
 import BillsModal from '../components/modals/BillsModal';
 
+// ── Auto-detect: find an unpaid bill that matches a new expense ───────────────
+function findMatchingBill(transaction, bills) {
+  if (transaction.type !== 'expense') return null;
+
+  const now      = new Date();
+  const nowMonth = now.getMonth();
+  const nowYear  = now.getFullYear();
+
+  const txCat  = (transaction.category    || '').toLowerCase().trim();
+  const txDesc = (transaction.description || '').toLowerCase().trim();
+
+  let best = null;
+  let bestScore = 0;
+
+  bills.forEach((bill) => {
+    if (bill.is_paid) return;
+
+    // Only bills due this month or already overdue — skip future months
+    const due = new Date(bill.due_date);
+    const isCurrent =
+      due.getFullYear() < nowYear ||
+      (due.getFullYear() === nowYear && due.getMonth() <= nowMonth);
+    if (!isCurrent) return;
+
+    const billName = (bill.name     || '').toLowerCase().trim();
+    const billCat  = (bill.category || '').toLowerCase().trim();
+
+    let score = 0;
+
+    // Category match
+    if (billCat && billCat === txCat)                               score += 3;
+    // Bill name found inside transaction description
+    if (billName.length >= 3 && txDesc.includes(billName))         score += 5;
+    // Transaction description found inside bill name
+    if (txDesc.length >= 3 && billName.includes(txDesc))           score += 4;
+
+    // Amount closeness
+    const billAmt = Number(bill.amount);
+    const txAmt   = Number(transaction.amount);
+    if (billAmt > 0 && txAmt > 0) {
+      const diff = Math.abs(billAmt - txAmt) / billAmt;
+      if (diff < 0.05)       score += 3;
+      else if (diff < 0.20)  score += 1;
+    }
+
+    if (score >= 3 && score > bestScore) { best = bill; bestScore = score; }
+  });
+
+  return best;
+}
+
+// ── Auto-detect: find a matching subscription (recurring) for a new expense ───
+function findMatchingSubscription(transaction, recurringTransactions) {
+  if (transaction.type !== 'expense') return null;
+
+  const txCat  = (transaction.category    || '').toLowerCase().trim();
+  const txDesc = (transaction.description || '').toLowerCase().trim();
+
+  let best = null;
+  let bestScore = 0;
+
+  recurringTransactions.forEach((sub) => {
+    if (sub.type !== 'expense') return;
+    if (!sub.is_subscription && sub.category !== 'Subscriptions') return;
+
+    const subName = (
+      sub.description || sub.subscription_service || sub.category || ''
+    ).toLowerCase().trim();
+    const subCat = (sub.category || '').toLowerCase().trim();
+
+    let score = 0;
+    if (subCat && subCat === txCat)                              score += 2;
+    if (subName.length >= 3 && txDesc.includes(subName))        score += 6;
+    if (txDesc.length >= 3 && subName.includes(txDesc))         score += 5;
+
+    const subAmt = Number(sub.amount);
+    const txAmt  = Number(transaction.amount);
+    if (subAmt > 0 && txAmt > 0) {
+      const diff = Math.abs(subAmt - txAmt) / subAmt;
+      if (diff < 0.05)       score += 3;
+      else if (diff < 0.20)  score += 1;
+    }
+
+    if (score >= 4 && score > bestScore) { best = sub; bestScore = score; }
+  });
+
+  return best;
+}
+
 export default function DashboardScreen() {
   const { colors, spacing, radius } = useTheme();
   const {
@@ -652,6 +741,37 @@ export default function DashboardScreen() {
       const isExpense = savedForm.type === 'expense';
       const isIncome  = savedForm.type === 'income';
 
+      // ── Auto-detect matching bill or subscription ───────────────────────
+      if (isExpense) {
+        const matchedBill = findMatchingBill(savedForm, bills);
+        const matchedSub  = !matchedBill ? findMatchingSubscription(savedForm, recurringTransactions) : null;
+
+        if (matchedBill) {
+          setTimeout(() => {
+            Alert.alert(
+              '✅ Bill Detected',
+              `This looks like your "${matchedBill.name}" bill (₱${Number(matchedBill.amount).toFixed(2)}). Mark it as paid?`,
+              [
+                { text: '✅ Mark Paid', onPress: () => handleMarkBillPaid(matchedBill.id) },
+                { text: 'Not Now', style: 'cancel' },
+              ]
+            );
+          }, 500);
+        } else if (matchedSub) {
+          const subLabel = matchedSub.description || matchedSub.subscription_service || matchedSub.category;
+          setTimeout(() => {
+            Alert.alert(
+              '🔁 Subscription Detected',
+              `This looks like your "${subLabel}" subscription (₱${Number(matchedSub.amount).toFixed(2)}/mo). Advance the next renewal date so it won't auto-charge again?`,
+              [
+                { text: '✅ Yes, advance', onPress: () => advanceSubscriptionNextRun(matchedSub) },
+                { text: 'No', style: 'cancel' },
+              ]
+            );
+          }, 500);
+        }
+      }
+
       // Notify on payday (income >= ₱5000)
       if (isIncome && txAmount >= 5000) {
         notifyPayday(txAmount).catch(() => {});
@@ -955,6 +1075,22 @@ export default function DashboardScreen() {
   const handleMarkBillPaid = async (billId) => {
     await supabase.from('bills').update({ is_paid: true, paid_at: new Date().toISOString() }).eq('id', billId);
     loadBills(activeSpace.id);
+  };
+
+  /** Advance a subscription's next_run by one cycle so the engine won't double-charge */
+  const advanceSubscriptionNextRun = async (sub) => {
+    if (!sub.next_run) return;
+    const cur = new Date(sub.next_run + 'T00:00:00');
+    let next;
+    switch (sub.frequency) {
+      case 'weekly':       next = new Date(cur); next.setDate(cur.getDate() + 7);       break;
+      case 'semi_monthly': next = new Date(cur); next.setDate(cur.getDate() + 15);      break;
+      case 'annual':       next = new Date(cur.getFullYear() + 1, cur.getMonth(), cur.getDate()); break;
+      default:             next = new Date(cur.getFullYear(), cur.getMonth() + 1, cur.getDate()); // monthly
+    }
+    const nextStr = `${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-${String(next.getDate()).padStart(2,'0')}`;
+    await supabase.from('recurring_transactions').update({ next_run: nextStr }).eq('id', sub.id);
+    loadRecurringTransactions(activeSpace.id);
   };
 
   const handleDeleteSpace = (spaceId) => {
