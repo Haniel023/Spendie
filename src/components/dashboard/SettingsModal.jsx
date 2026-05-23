@@ -11,17 +11,17 @@
  *   💡  Insights    (memory cards + regret tracker)
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Switch, Modal,
-  ScrollView, Pressable,
+  ScrollView, Pressable, Platform,
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import { useTheme } from '../../lib/ThemeContext';
 import { useSettings } from '../../lib/SettingsContext';
 import { COACH_PERSONALITIES, PERSONALITY_ORDER } from '../../lib/coachEngine';
 import ThemePicker from '../common/ThemePicker';
-import { scheduleDailyLoggingReminder, scheduleWeeklyBudgetReminder, cancelNotificationsByTag, requestNotificationPermissions } from '../../lib/pushNotifications';
+import { scheduleDailyLoggingReminder, scheduleWeeklyBudgetReminder, cancelNotificationsByTag, requestNotificationPermissions, getWebPermissionStatus } from '../../lib/pushNotifications';
 
 // ── Section Label ──────────────────────────────────────────────────────────────
 
@@ -78,6 +78,21 @@ export default function SettingsModal({ visible, onClose }) {
     weeklyBudgetReminderEnabled,
     updateSetting,
   } = useSettings();
+
+  // ── Web notification permission state ──────────────────────────────────────
+  const [webPermStatus, setWebPermStatus] = useState(() => getWebPermissionStatus());
+
+  useEffect(() => {
+    if (visible) setWebPermStatus(getWebPermissionStatus());
+  }, [visible]);
+
+  const handleEnableWebNotifications = async () => {
+    const granted = await requestNotificationPermissions();
+    setWebPermStatus(getWebPermissionStatus());
+    if (!granted && Platform.OS === 'web') {
+      // If denied, browser has blocked it — user needs to go to iOS Settings
+    }
+  };
 
   const handleDailyReminderToggle = async (v) => {
     updateSetting('dailyReminderEnabled', v);
@@ -262,18 +277,66 @@ export default function SettingsModal({ visible, onClose }) {
             {/* ── Notifications ─────────────────────────────────────── */}
             <SectionLabel title="🔔  NOTIFICATIONS" />
 
+            {/* Web / PWA permission status banner */}
+            {Platform.OS === 'web' && (
+              <View style={[
+                styles.permBanner,
+                {
+                  backgroundColor: webPermStatus === 'granted'
+                    ? '#dcfce7'
+                    : webPermStatus === 'denied'
+                      ? '#fee2e2'
+                      : colors.primaryLight,
+                  borderColor: webPermStatus === 'granted'
+                    ? '#16a34a'
+                    : webPermStatus === 'denied'
+                      ? '#ef4444'
+                      : colors.primary,
+                },
+              ]}>
+                {webPermStatus === 'granted' ? (
+                  <Text style={[styles.permText, { color: '#16a34a' }]}>
+                    ✅ Notifications enabled — alerts will appear while the app is open.
+                  </Text>
+                ) : webPermStatus === 'denied' ? (
+                  <Text style={[styles.permText, { color: '#ef4444' }]}>
+                    ⛔ Notifications are blocked.{'\n'}To fix: go to{' '}
+                    <Text style={{ fontWeight: '700' }}>iOS Settings → Safari → [your site] → Notifications → Allow</Text>
+                    , then reopen the app.
+                  </Text>
+                ) : (
+                  <>
+                    <Text style={[styles.permText, { color: colors.primary, marginBottom: 10 }]}>
+                      🔔 Enable notifications to get alerts for bills, budget limits, and payday — while the app is open.
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.permBtn, { backgroundColor: colors.primary }]}
+                      onPress={handleEnableWebNotifications}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.permBtnText}>Enable Notifications</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            )}
+
             <View style={[styles.toggleGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <ToggleRow
                 icon="📅"
                 label="Daily Logging Reminder"
-                description="Remind you at 8 PM every day to log your expenses"
+                description={Platform.OS === 'web'
+                  ? 'Remind you at 8 PM every day (fires when app is open)'
+                  : 'Remind you at 8 PM every day to log your expenses'}
                 value={!!dailyReminderEnabled}
                 onToggle={handleDailyReminderToggle}
               />
               <ToggleRow
                 icon="📊"
                 label="Weekly Budget Check-In"
-                description="Get a Sunday reminder to review your spending"
+                description={Platform.OS === 'web'
+                  ? 'Get a Sunday reminder (fires when app is open)'
+                  : 'Get a Sunday reminder to review your spending'}
                 value={!!weeklyBudgetReminderEnabled}
                 onToggle={handleWeeklyReminderToggle}
                 isLast
@@ -447,5 +510,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 20,
     fontStyle: 'italic',
+  },
+
+  // Notification permission banner (web/PWA only)
+  permBanner: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 4,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    padding: 14,
+  },
+  permText: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  permBtn: {
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  permBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

@@ -32,13 +32,35 @@ Notifications.setNotificationHandler({
  * @returns {Promise<boolean>} true if permissions granted
  */
 export async function requestNotificationPermissions() {
-  if (Platform.OS === 'web') return false;
+  // ── Web / PWA path ────────────────────────────────────────────────────────
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined' || !('Notification' in window)) return false;
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission === 'denied') return false;
+    try {
+      const result = await Notification.requestPermission();
+      return result === 'granted';
+    } catch {
+      return false;
+    }
+  }
 
+  // ── Native path ───────────────────────────────────────────────────────────
   const { status: existing } = await Notifications.getPermissionsAsync();
   if (existing === 'granted') return true;
 
   const { status } = await Notifications.requestPermissionsAsync();
   return status === 'granted';
+}
+
+/**
+ * Returns the current web notification permission status.
+ * 'granted' | 'denied' | 'default' | 'unsupported'
+ */
+export function getWebPermissionStatus() {
+  if (Platform.OS !== 'web') return 'unsupported';
+  if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
+  return Notification.permission; // 'granted' | 'denied' | 'default'
 }
 
 /**
@@ -86,14 +108,24 @@ export async function initNotifications() {
  * @param {object} [opts.data]   extra payload
  */
 export async function sendImmediateNotification({ title, body, channel = 'insights', data = {} }) {
+  // ── Web / PWA path ────────────────────────────────────────────────────────
   if (Platform.OS === 'web') {
-    // Web browser notification fallback
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/icon.png' });
-    }
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    // Only fire if user has already granted permission — don't auto-prompt mid-action
+    if (Notification.permission !== 'granted') return;
+    try {
+      const n = new Notification(title, {
+        body,
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
+        tag: data?.type ?? 'spendie',
+      });
+      setTimeout(() => n.close(), 6000);
+    } catch {}
     return;
   }
 
+  // ── Native path ───────────────────────────────────────────────────────────
   await Notifications.scheduleNotificationAsync({
     content: {
       title,
