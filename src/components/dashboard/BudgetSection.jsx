@@ -50,6 +50,7 @@ export default function BudgetSection({ budgets, transactions, onCreateBudget, o
                   {exceeded && <Text style={styles.exceededBadge}>Exceeded</Text>}
                   <TouchableOpacity style={styles.editBtn} onPress={() => onEditBudget(budget)}>
                     <Pencil size={13} color={colors.primary} />
+                    <Text style={styles.editBtnText}>Edit</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -84,7 +85,16 @@ const styles = StyleSheet.create({
   budgetAmount: { fontSize: 12, color: colors.textSecondary },
   budgetRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   exceededBadge: { fontSize: 10, fontWeight: '700', color: colors.expense, backgroundColor: colors.expenseLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.full },
-  editBtn: { padding: 6, backgroundColor: colors.primaryLight, borderRadius: radius.sm },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  editBtnText: { fontSize: 12, fontWeight: '600', color: colors.primary },
   progressBar: { height: 6, backgroundColor: colors.border, borderRadius: radius.full, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: radius.full },
 });

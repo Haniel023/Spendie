@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Receipt, Plus, CheckCircle, AlertCircle, Clock } from 'lucide-react-native';
+import { Receipt, Plus, CheckCircle, AlertCircle, Clock, Pencil } from 'lucide-react-native';
 import { categoryConfig } from '../../lib/categoryConfig';
 import { colors, spacing, radius, shadow, typography } from '../../lib/theme';
 
@@ -77,10 +77,11 @@ export default function BillsSection({ bills = [], onAdd, onEdit, onDelete, onMa
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.primaryLight }]}
+              style={[styles.actionBtn, styles.editBtn]}
               onPress={() => onEdit(bill)}
             >
-              <Text style={{ fontSize: 12 }}>✏️</Text>
+              <Pencil size={13} color={colors.primary} />
+              <Text style={styles.editBtnText}>Edit</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -253,5 +254,15 @@ const styles = StyleSheet.create({
   dueBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   dueText: { fontSize: 10, fontWeight: '700' },
   billActions: { flexDirection: 'row', gap: 4 },
-  actionBtn: { width: 28, height: 28, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  actionBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  editBtnText: { fontSize: 12, fontWeight: '600', color: colors.primary },
 });

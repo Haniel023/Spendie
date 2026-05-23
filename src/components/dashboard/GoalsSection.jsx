@@ -179,6 +179,7 @@ export default function GoalsSection({ goals, onCreateGoal, onEditGoal, onDelete
                   )}
                   <TouchableOpacity style={styles.editBtn} onPress={() => onEditGoal(goal)}>
                     <Pencil size={13} color={colors.primary} />
+                    <Text style={styles.editBtnText}>Edit</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -235,7 +236,16 @@ const styles = StyleSheet.create({
   completedBadge: { fontSize: 11, fontWeight: '700', color: colors.income, backgroundColor: colors.incomeLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.full },
   timelineBtn: { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.primaryLight, borderRadius: radius.full },
   timelineBtnText: { fontSize: 10, fontWeight: '600', color: colors.primary },
-  editBtn: { padding: 6, backgroundColor: colors.primaryLight, borderRadius: radius.sm },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  editBtnText: { fontSize: 12, fontWeight: '600', color: colors.primary },
 
   progressBar: { height: 7, backgroundColor: colors.border, borderRadius: radius.full, overflow: 'hidden', marginBottom: 3 },
   progressFill: { height: '100%', borderRadius: radius.full, backgroundColor: colors.primary },

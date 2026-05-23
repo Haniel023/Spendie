@@ -169,7 +169,8 @@ export default function TransactionsSection({
                         </Text>
                         <View style={styles.actions}>
                           <TouchableOpacity style={styles.editBtn} onPress={() => onEdit(item)}>
-                            <Pencil size={12} color={colors.primary} />
+                            <Pencil size={13} color={colors.primary} />
+                            <Text style={styles.editBtnText}>Edit</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -330,5 +331,14 @@ const styles = StyleSheet.create({
   income: { color: colors.income },
   expense: { color: colors.expense },
   actions: { flexDirection: 'row', gap: 4 },
-  editBtn: { padding: 5, backgroundColor: colors.primaryLight, borderRadius: 6 },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  editBtnText: { fontSize: 12, fontWeight: '600', color: colors.primary },
 });

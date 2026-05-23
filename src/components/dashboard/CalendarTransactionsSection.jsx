@@ -350,7 +350,8 @@ export default function CalendarTransactionsSection({
                             style={[styles.editBtn, { backgroundColor: colors.primaryLight }]}
                             onPress={() => onEdit(item)}
                           >
-                            <Pencil size={12} color={colors.primary} />
+                            <Pencil size={13} color={colors.primary} />
+                            <Text style={[styles.editBtnText, { color: colors.primary }]}>Edit</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -500,5 +501,13 @@ const styles = StyleSheet.create({
   itemRight: { alignItems: 'flex-end', gap: 4 },
   amount: { fontSize: 13, fontWeight: '700' },
   actions: { flexDirection: 'row', gap: 4 },
-  editBtn: { padding: 5, borderRadius: 6 },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  editBtnText: { fontSize: 12, fontWeight: '600' },
 });

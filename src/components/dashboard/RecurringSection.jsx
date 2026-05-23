@@ -223,7 +223,8 @@ function RecurringRow({ item, onEdit, onDelete }) {
             style={styles.actionBtn}
             accessibilityLabel="Edit recurring"
           >
-            <Pencil size={14} color={colors.primary} />
+            <Pencil size={13} color={colors.primary} />
+            <Text style={styles.actionBtnText}>Edit</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -340,13 +341,15 @@ const styles = StyleSheet.create({
   rowAmount: { fontSize: 13, fontWeight: '700' },
   rowActions: { flexDirection: 'row', gap: 6 },
   actionBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.primaryLight,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radius.md,
   },
+  actionBtnText: { fontSize: 12, fontWeight: '600', color: colors.primary },
   // Hint
   hint: {
     fontSize: 11,
