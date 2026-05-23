@@ -45,3 +45,8 @@ yarn-error.*
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Never push to repo
+supabase/migrations/
+SESSION_5_NOTES.md
+SESSION_6_NOTES.md
