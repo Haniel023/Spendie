@@ -9,6 +9,7 @@
 
 import { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { BookOpen, Sparkles } from 'lucide-react-native';
 import { useTheme } from '../../lib/ThemeContext';
 import { useSettings } from '../../lib/SettingsContext';
 import { generateMemoryCards } from '../../lib/memoryEngine';
@@ -41,7 +42,8 @@ function MemoryCard({ memory, colors }) {
       <Text style={[styles.cardMessage, { color: colors.textPrimary }]}>{memory.message}</Text>
       {memory.nudge && (
         <View style={[styles.nudgeRow, { backgroundColor: accent + '18' }]}>
-          <Text style={[styles.nudgeText, { color: accent }]}>✨ {memory.nudge}</Text>
+          <Sparkles size={11} color={accent} />
+          <Text style={[styles.nudgeText, { color: accent }]}>{memory.nudge}</Text>
         </View>
       )}
     </View>
@@ -61,7 +63,10 @@ export default function MemoryCards({ transactions }) {
       {/* Header */}
       <View style={[styles.headerRow, { marginHorizontal: spacing.lg }]}>
         <Text style={[styles.label, { color: colors.textMuted }]}>MEMORIES</Text>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>📸 Your Money Story</Text>
+        <View style={styles.titleRow}>
+          <BookOpen size={15} color={colors.textPrimary} strokeWidth={2.5} />
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Your Money Story</Text>
+        </View>
       </View>
 
       {/* Cards scroll */}
@@ -82,6 +87,7 @@ const styles = StyleSheet.create({
   wrapper: {},
   headerRow: { marginBottom: 10 },
   label: { fontSize: 10, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { fontSize: 16, fontWeight: '800' },
 
   scrollContent: { gap: 12, paddingBottom: 4 },
@@ -104,8 +110,11 @@ const styles = StyleSheet.create({
   cardLookback: { fontSize: 11, fontStyle: 'italic' },
   cardMessage: { fontSize: 13, lineHeight: 20 },
   nudgeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
     borderRadius: 8,
     padding: 10,
   },
-  nudgeText: { fontSize: 12, fontWeight: '600', lineHeight: 18 },
+  nudgeText: { fontSize: 12, fontWeight: '600', lineHeight: 18, flex: 1 },
 });

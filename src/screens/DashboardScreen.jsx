@@ -16,13 +16,12 @@ import { enqueue, syncQueue, getQueuedCount, isOnline } from '../lib/offlineQueu
 import AppLoader from '../components/common/AppLoader';
 import Header from '../components/common/Header';
 import BottomNavigation from '../components/common/BottomNavigation';
-import FloatingAddButton from '../components/common/FloatingAddButton';
 import PaydayCelebration from '../components/common/PaydayCelebration';
 
 import BalanceCard from '../components/dashboard/BalanceCard';
 import RecentActivity from '../components/dashboard/RecentActivity';
-import AlertSection from '../components/dashboard/AlertSection';
 // InsightsSection removed — insights are now shown inside CoachSection
+// AlertSection removed — alerts now fire as push notifications
 // TransactionsSection replaced by CalendarTransactionsSection (unified card)
 import CalendarTransactionsSection from '../components/dashboard/CalendarTransactionsSection';
 import BudgetSection from '../components/dashboard/BudgetSection';
@@ -33,20 +32,16 @@ import SpacesSection from '../components/dashboard/SpacesSection';
 import MembersSection from '../components/dashboard/MembersSection';
 import QuickInfoSection from '../components/dashboard/QuickInfoSection';
 import StreakCard from '../components/dashboard/StreakCard';
-import SubscriptionSection from '../components/dashboard/SubscriptionSection';
 import BillsSection from '../components/dashboard/BillsSection';
 // CalendarView replaced by CalendarTransactionsSection (unified card)
 import CashFlowForecast from '../components/dashboard/CashFlowForecast';
 import NetWorthSection from '../components/dashboard/NetWorthSection';
 import AchievementsSection from '../components/dashboard/AchievementsSection';
 import AchievementUnlockToast from '../components/dashboard/AchievementUnlockToast';
-import RecurringSection from '../components/dashboard/RecurringSection';
 import ExpenseFrequency from '../components/dashboard/ExpenseFrequency';
 // SpendingPersonality card removed — shown as modal when hero chip is tapped
 import MonthlyReview from '../components/dashboard/MonthlyReview';
 import CoachSection from '../components/dashboard/CoachSection';
-// RoastCard removed — merged into CoachSection as 'roast' personality
-import ChallengesSection from '../components/dashboard/ChallengesSection';
 import MemoryCards from '../components/dashboard/MemoryCards';
 import RegretSection from '../components/dashboard/RegretSection';
 import AnnualWrapped from '../components/dashboard/AnnualWrapped';
@@ -65,13 +60,16 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import ConfirmModal from '../components/common/ConfirmModal';
+import CardModal from '../components/modals/CardModal';
+import CardPickerModal from '../components/modals/CardPickerModal';
+import CardBreakdownSection from '../components/dashboard/CardBreakdownSection';
 import TransactionModal from '../components/modals/TransactionModal';
 import BudgetModal from '../components/modals/BudgetModal';
 import GoalModal from '../components/modals/GoalModal';
 import SpaceModal from '../components/modals/SpaceModal';
 import InviteModal from '../components/modals/InviteModal';
-import RecurringModal from '../components/modals/RecurringModal';
 import BillsModal from '../components/modals/BillsModal';
+import SubscriptionModal from '../components/modals/SubscriptionModal';
 
 // ── Auto-detect: find an unpaid bill that matches a new expense ───────────────
 function findMatchingBill(transaction, bills) {
@@ -187,9 +185,9 @@ export default function DashboardScreen() {
   const [goals, setGoals] = useState([]);
   const [recurringTransactions, setRecurringTransactions] = useState([]);
   const [bills, setBills] = useState([]);
+  const [cards, setCards] = useState([]);
   const [netWorthEntries, setNetWorthEntries] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [alerts, setAlerts] = useState([]);
   const [insights, setInsights] = useState([]);
   const [summary, setSummary] = useState({ income: 0, expenses: 0, balance: 0 });
 
@@ -208,6 +206,53 @@ export default function DashboardScreen() {
     [transactions, selectedMonth, selectedYear]
   );
 
+  // Active card — drives transaction filtering throughout the app.
+  // When a card is selected, only its transactions are shown in feeds/timelines.
+  const [selectedCardId, setSelectedCardId] = useState(null);
+
+  // The selected card object (null = no card / show all)
+  const selectedCard = useMemo(
+    () => cards.find((c) => c.id === selectedCardId) ?? null,
+    [cards, selectedCardId]
+  );
+
+  // Live balance for the selected card (opening balance ± all linked transactions)
+  const selectedCardBalance = useMemo(() => {
+    if (!selectedCard) return null;
+    const net = transactions
+      .filter((t) => t.card_id === selectedCard.id)
+      .reduce((sum, t) => sum + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0);
+    return Number(selectedCard.current_balance ?? 0) + net;
+  }, [selectedCard, transactions]);
+
+  // Total live balance across ALL cards (used when no specific card is selected)
+  const totalCardsBalance = useMemo(() => {
+    if (cards.length === 0) return null;
+    return cards.reduce((sum, card) => {
+      const net = transactions
+        .filter((t) => t.card_id === card.id)
+        .reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0);
+      return sum + Number(card.current_balance ?? 0) + net;
+    }, 0);
+  }, [cards, transactions]);
+
+  // Card-filtered transactions: when a card is active, only show its transactions.
+  // Keep raw `transactions` for analytics, achievements, budget tracking, etc.
+  const filteredTransactions = useMemo(() => {
+    if (!selectedCardId) return transactions;
+    return transactions.filter((t) => t.card_id === selectedCardId);
+  }, [transactions, selectedCardId]);
+
+  // Month-filtered view of the card-filtered set (used in transaction feeds)
+  const filteredMonthTransactions = useMemo(
+    () =>
+      filteredTransactions.filter((t) => {
+        const d = toPHDate(t.created_at);
+        return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+      }),
+    [filteredTransactions, selectedMonth, selectedYear]
+  );
+
   // Monthly income / expenses / saved
   const monthSummary = useMemo(() => {
     const income = monthTransactions
@@ -219,11 +264,35 @@ export default function DashboardScreen() {
     return { income, expenses, balance: income - expenses };
   }, [monthTransactions]);
 
-  // AI Coach insight for Trends tab
-  const trendsCoachInsight = useMemo(
-    () => generateCoachComment({ personality: coachPersonality, monthSummary, budgets, transactions, monthTransactions }),
-    [coachPersonality, monthSummary, budgets, transactions, monthTransactions]
-  );
+  // AI Coach insight for Trends tab — card-aware, same logic as home tab CoachSection
+  const trendsCoachInsight = useMemo(() => {
+    // Card selected but no transactions on it this month → show card-specific no-activity hint
+    if (selectedCard && filteredMonthTransactions.length === 0) {
+      const name = selectedCard.bank_name || selectedCard.card_name;
+      return {
+        icon: '💳',
+        title: `${name} has no activity this month`,
+        text: `No transactions are linked to this card yet in this period. Switch cards or log a transaction to this card to see analytics here.`,
+      };
+    }
+    // Build card-filtered summary when a card is selected
+    const effectiveTx = selectedCard ? filteredMonthTransactions : monthTransactions;
+    const effectiveSummary = selectedCard
+      ? (() => {
+          const inc = filteredMonthTransactions.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+          const exp = filteredMonthTransactions.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+          return { income: inc, expenses: exp, balance: inc - exp };
+        })()
+      : monthSummary;
+    return generateCoachComment({
+      personality:       coachPersonality,
+      monthSummary:      effectiveSummary,
+      budgets,
+      transactions,
+      monthTransactions: effectiveTx,
+      cardBalance:       selectedCardBalance ?? null,
+    });
+  }, [coachPersonality, monthSummary, budgets, transactions, monthTransactions, filteredMonthTransactions, selectedCard, selectedCardBalance]);
 
   // ── Streaks (for achievements — all using Philippine timezone) ────────────
   const loggingStreak = useMemo(() => {
@@ -361,32 +430,52 @@ export default function DashboardScreen() {
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showSpaceModal, setShowSpaceModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [showBillsModal, setShowBillsModal] = useState(false);
+  const [showSubModal,   setShowSubModal]   = useState(false);
+  const [editingSub,     setEditingSub]     = useState(null);
+  const [showCardModal,  setShowCardModal]  = useState(false);
+  const [showCardPicker, setShowCardPicker] = useState(false);
+  const [editingCard, setEditingCard] = useState(null);
+  const [cardForm, setCardForm] = useState({
+    card_name: '', card_holder_name: '', last_four: '',
+    card_type: 'visa', bank_name: '',
+    card_color_from: '#1a1a2e', card_color_to: '#16213e',
+    credit_limit: '', current_balance: '0',
+    expiry_month: '', expiry_year: '', notes: '',
+  });
 
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [editingBudget, setEditingBudget] = useState(null);
   const [editingGoal, setEditingGoal] = useState(null);
   const [editingBill, setEditingBill] = useState(null);
-  const [editingRecurring, setEditingRecurring] = useState(null);
 
   // ── Forms ──────────────────────────────────────────────────────────────────
+
   const [transactionForm, setTransactionForm] = useState({
-    type: 'expense', amount: '', category: '', description: '', emoji: '',
+    type: 'expense', amount: '', category: '', description: '', card_id: null,
   });
   const [budgetForm, setBudgetForm] = useState({ title: '', category: '', monthly_limit: '' });
   const [goalForm, setGoalForm] = useState({ title: '', target_amount: '', current_amount: '', deadline: '', emoji: '' });
-  const [recurringForm, setRecurringForm] = useState({
-    type: 'expense', amount: '', category: '', description: '', emoji: '',
-    frequency: 'monthly', recurring_day_1: '', recurring_day_2: '', is_subscription: false,
-  });
   const [billForm, setBillForm] = useState({
     name: '', amount: '', category: 'Bills', due_date: '', is_recurring: false,
     frequency: 'monthly', emoji: '', notes: '',
   });
+  const todayStr = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; };
+  const BLANK_SUB_FORM = { description: '', amount: '', category: 'Subscriptions', frequency: 'monthly', next_run: todayStr() };
+  const [subForm, setSubForm] = useState(BLANK_SUB_FORM);
   const [spaceName, setSpaceName] = useState('');
   const [spaceEmoji, setSpaceEmoji] = useState('💰');
   const [inviteEmail, setInviteEmail] = useState('');
+
+  // ── Persist selected card across sessions ─────────────────────────────────
+  const SELECTED_CARD_KEY = '@spendie_selected_card_id';
+  useEffect(() => {
+    if (selectedCardId) {
+      AsyncStorage.setItem(SELECTED_CARD_KEY, selectedCardId).catch(() => {});
+    } else {
+      AsyncStorage.removeItem(SELECTED_CARD_KEY).catch(() => {});
+    }
+  }, [selectedCardId]);
 
   // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => { loadDashboard(); }, []);
@@ -412,14 +501,33 @@ export default function DashboardScreen() {
     }
   };
 
-  // Alerts use month transactions so budget progress is month-scoped
+  // Alerts — fire as push notifications; don't repeat the same message in one session
+  const sentAlertKeys = useRef(new Set());
   useEffect(() => {
-    setAlerts(generateSmartAlerts({ summary: monthSummary, budgets, transactions: monthTransactions }));
+    const currentAlerts = generateSmartAlerts({ summary: monthSummary, budgets, transactions: monthTransactions });
+    currentAlerts.forEach((alert) => {
+      if (sentAlertKeys.current.has(alert.message)) return;
+      sentAlertKeys.current.add(alert.message);
+      sendImmediateNotification({
+        title: alert.type === 'danger' ? '🛑 Budget Alert' : '⚠️ Spending Warning',
+        body: alert.message,
+        channel: 'alerts',
+      }).catch(() => {});
+    });
   }, [monthTransactions, budgets, monthSummary]);
 
   useEffect(() => {
-    setInsights(generateInsights({ transactions: monthTransactions, budgets, goals, summary: monthSummary, personality: coachPersonality }));
-  }, [monthTransactions, budgets, goals, monthSummary, coachPersonality]);
+    // When a card is selected, generate insights from that card's monthly transactions only.
+    // This keeps insights card-aware — the same pattern used by CoachSection and trendsCoachInsight.
+    const effectiveSummary = selectedCard
+      ? (() => {
+          const income   = filteredMonthTransactions.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+          const expenses = filteredMonthTransactions.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+          return { income, expenses, balance: income - expenses };
+        })()
+      : monthSummary;
+    setInsights(generateInsights({ transactions: filteredMonthTransactions, budgets, goals, summary: effectiveSummary, personality: coachPersonality }));
+  }, [filteredMonthTransactions, budgets, goals, monthSummary, coachPersonality, selectedCard]);
 
   useEffect(() => {
     if (!user) return;
@@ -551,6 +659,7 @@ export default function DashboardScreen() {
       loadRecurringTransactions(defaultSpace.id);
       loadBills(defaultSpace.id);
       loadNetWorthEntries(authData.user.id);
+      loadCards(authData.user.id);
     }
     setPageLoading(false);
   };
@@ -667,6 +776,26 @@ export default function DashboardScreen() {
     setNetWorthEntries(data || []);
   };
 
+  const loadCards = async (userId) => {
+    if (!userId) return;
+    const { data, error } = await supabase
+      .from('cards').select('*').eq('user_id', userId)
+      .order('created_at', { ascending: true });
+    if (error) {
+      if (error.code !== '42P01') console.error(error);
+      return;
+    }
+    const cardList = data || [];
+    setCards(cardList);
+    // Restore the last selected card from the previous session
+    try {
+      const savedId = await AsyncStorage.getItem('@spendie_selected_card_id');
+      if (savedId && cardList.some((c) => c.id === savedId)) {
+        setSelectedCardId(savedId);
+      }
+    } catch {}
+  };
+
   const handleSaveNetWorth = async (entry) => {
     if (!user) return;
     const { error } = await supabase.from('net_worth_entries').upsert(
@@ -714,22 +843,24 @@ export default function DashboardScreen() {
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleLogout = async () => { await supabase.auth.signOut(); };
 
+
   const handleAddTransaction = async () => {
     if (!activeSpace || !user) return;
+    const newAmount = parseFloat(String(transactionForm.amount).replace(/,/g, '')) || 0;
     if (editingTransaction) {
       // Editing always requires online (we have an ID)
       const { error } = await supabase.from('transactions').update({
-        type: transactionForm.type, amount: parseFloat(String(transactionForm.amount).replace(/,/g, '')) || 0,
+        type: transactionForm.type, amount: newAmount,
         category: transactionForm.category, description: transactionForm.description,
-        emoji: transactionForm.emoji || null,
+        card_id: transactionForm.card_id || null,
       }).eq('id', editingTransaction.id);
       if (error) { console.error(error); return; }
     } else {
       const payload = {
         space_id: activeSpace.id, created_by: user.id,
-        type: transactionForm.type, amount: parseFloat(String(transactionForm.amount).replace(/,/g, '')) || 0,
+        type: transactionForm.type, amount: newAmount,
         category: transactionForm.category, description: transactionForm.description,
-        emoji: transactionForm.emoji || null,
+        card_id: transactionForm.card_id || null,
         created_at: getPHNowISO(), // explicit PH-time ISO timestamp
       };
       const online = await isOnline();
@@ -742,7 +873,7 @@ export default function DashboardScreen() {
         const count = await getQueuedCount();
         setPendingSync(count);
         Alert.alert(
-          '📴 Saved Offline',
+          'Saved Offline',
           'No internet connection. Your transaction has been saved and will sync automatically when you\'re back online.',
           [{ text: 'OK' }]
         );
@@ -752,7 +883,7 @@ export default function DashboardScreen() {
     const isNewTransaction = !editingTransaction;
     const savedForm = { ...transactionForm };
 
-    setTransactionForm({ type: 'expense', amount: '', category: '', description: '', emoji: '' });
+    setTransactionForm({ type: 'expense', amount: '', category: '', description: '', card_id: selectedCardId ?? null });
     setEditingTransaction(null);
     setShowModal(false);
     if (await isOnline()) loadTransactions(activeSpace.id);
@@ -779,10 +910,10 @@ export default function DashboardScreen() {
         if (matchedBill) {
           setTimeout(() => {
             Alert.alert(
-              '✅ Bill Detected',
+              'Bill Detected',
               `This looks like your "${matchedBill.name}" bill (₱${Number(matchedBill.amount).toFixed(2)}). Mark it as paid?`,
               [
-                { text: '✅ Mark Paid', onPress: () => handleMarkBillPaid(matchedBill.id) },
+                { text: 'Mark Paid', onPress: () => handleMarkBillPaid(matchedBill.id) },
                 { text: 'Not Now', style: 'cancel' },
               ]
             );
@@ -791,10 +922,10 @@ export default function DashboardScreen() {
           const subLabel = matchedSub.description || matchedSub.subscription_service || matchedSub.category;
           setTimeout(() => {
             Alert.alert(
-              '🔁 Subscription Detected',
+              'Subscription Detected',
               `This looks like your "${subLabel}" subscription (₱${Number(matchedSub.amount).toFixed(2)}/mo). Advance the next renewal date so it won't auto-charge again?`,
               [
-                { text: '✅ Yes, advance', onPress: () => advanceSubscriptionNextRun(matchedSub) },
+                { text: 'Yes, advance', onPress: () => advanceSubscriptionNextRun(matchedSub) },
                 { text: 'No', style: 'cancel' },
               ]
             );
@@ -935,125 +1066,6 @@ export default function DashboardScreen() {
     });
   };
 
-  const BLANK_RECURRING_FORM = {
-    type: 'expense', amount: '', category: '', description: '', emoji: '',
-    frequency: 'monthly',
-    recurring_day: '',        // day of month for monthly (1-31)
-    recurring_weekday: '',    // day of week for weekly (0=Sun … 6=Sat)
-    recurring_day_1: '', recurring_day_2: '', // for semi_monthly
-    is_subscription: false,
-  };
-
-  /** Compute the next run date from frequency + selected day fields */
-  const computeNextRun = (form) => {
-    const today = new Date();
-    const freq = form.frequency;
-
-    if (freq === 'monthly' && form.recurring_day) {
-      const day = Number(form.recurring_day);
-      const d = new Date(today.getFullYear(), today.getMonth(), day);
-      // If that day already passed this month, schedule for next month
-      if (d <= today) d.setMonth(d.getMonth() + 1);
-      return d.toISOString().split('T')[0];
-    }
-
-    if (freq === 'weekly' && form.recurring_weekday !== '') {
-      const targetDay = Number(form.recurring_weekday);
-      const d = new Date(today);
-      const diff = (targetDay - d.getDay() + 7) % 7;
-      d.setDate(d.getDate() + (diff === 0 ? 7 : diff));
-      return d.toISOString().split('T')[0];
-    }
-
-    return today.toISOString().split('T')[0];
-  };
-
-  const handleCreateRecurring = async () => {
-    const nextRun = computeNextRun(recurringForm);
-    const { error } = await supabase.from('recurring_transactions').insert([{
-      space_id: activeSpace.id, created_by: user.id,
-      type: recurringForm.type, amount: parseFloat(String(recurringForm.amount).replace(/,/g, '')) || 0,
-      category: recurringForm.category, description: recurringForm.description,
-      emoji: recurringForm.emoji || null,
-      frequency: recurringForm.frequency, next_run: nextRun,
-      is_subscription: recurringForm.is_subscription || false,
-      recurring_day:   recurringForm.frequency === 'monthly'     ? (Number(recurringForm.recurring_day) || null)   : null,
-      recurring_weekday: recurringForm.frequency === 'weekly'    ? (Number(recurringForm.recurring_weekday) ?? null) : null,
-      recurring_day_1: recurringForm.frequency === 'semi_monthly' ? Number(recurringForm.recurring_day_1) : null,
-      recurring_day_2: recurringForm.frequency === 'semi_monthly' ? Number(recurringForm.recurring_day_2) : null,
-    }]);
-    if (error) { console.error(error); return; }
-    const savedRecurring = { ...recurringForm };
-    setRecurringForm(BLANK_RECURRING_FORM);
-    setShowRecurringModal(false);
-    loadRecurringTransactions(activeSpace.id);
-    const comment = generatePlanItemComment({ personality: coachPersonality, type: 'recurring', item: savedRecurring });
-    setTimeout(() => setCoachComment(comment), 400);
-  };
-
-  /** Open modal pre-filled with an existing recurring transaction for editing */
-  const handleEditRecurring = (item) => {
-    setEditingRecurring(item);
-    setRecurringForm({
-      type:               item.type,
-      amount:             String(item.amount),
-      category:           item.category,
-      description:        item.description || '',
-      emoji:              item.emoji || '',
-      frequency:          item.frequency,
-      recurring_day:      item.recurring_day != null ? String(item.recurring_day) : '',
-      recurring_weekday:  item.recurring_weekday != null ? String(item.recurring_weekday) : '',
-      recurring_day_1:    item.recurring_day_1 ? String(item.recurring_day_1) : '',
-      recurring_day_2:    item.recurring_day_2 ? String(item.recurring_day_2) : '',
-      is_subscription:    item.is_subscription || false,
-    });
-    setShowRecurringModal(true);
-  };
-
-  /** Save edits to an existing recurring transaction */
-  const handleUpdateRecurring = async () => {
-    if (!editingRecurring) return;
-    const nextRun = computeNextRun(recurringForm);
-    const { error } = await supabase
-      .from('recurring_transactions')
-      .update({
-        type:              recurringForm.type,
-        amount:            parseFloat(String(recurringForm.amount).replace(/,/g, '')) || 0,
-        category:          recurringForm.category,
-        description:       recurringForm.description,
-        emoji:             recurringForm.emoji || null,
-        frequency:         recurringForm.frequency,
-        next_run:          nextRun,
-        is_subscription:   recurringForm.is_subscription || false,
-        recurring_day:     recurringForm.frequency === 'monthly'      ? (Number(recurringForm.recurring_day) || null)    : null,
-        recurring_weekday: recurringForm.frequency === 'weekly'       ? (Number(recurringForm.recurring_weekday) ?? null) : null,
-        recurring_day_1:   recurringForm.frequency === 'semi_monthly' ? Number(recurringForm.recurring_day_1) : null,
-        recurring_day_2:   recurringForm.frequency === 'semi_monthly' ? Number(recurringForm.recurring_day_2) : null,
-      })
-      .eq('id', editingRecurring.id);
-    if (error) { Alert.alert('Error', 'Failed to update recurring transaction.'); return; }
-    setEditingRecurring(null);
-    setRecurringForm(BLANK_RECURRING_FORM);
-    setShowRecurringModal(false);
-    loadRecurringTransactions(activeSpace.id);
-  };
-
-  /** Delete a recurring transaction with confirmation */
-  const handleDeleteRecurring = (recurringId) => {
-    confirmDelete(
-      'Delete Recurring',
-      'This will stop future auto-logs for this item. Are you sure?',
-      async () => {
-        const { error } = await supabase
-          .from('recurring_transactions')
-          .delete()
-          .eq('id', recurringId);
-        if (error) { Alert.alert('Error', 'Failed to delete recurring transaction.'); return; }
-        loadRecurringTransactions(activeSpace.id);
-      }
-    );
-  };
-
   const handleCreateBill = async () => {
     if (!billForm.name || !billForm.due_date || !activeSpace || !user) return;
     const payload = {
@@ -1095,6 +1107,47 @@ export default function DashboardScreen() {
     }
   };
 
+  const handleCreateSubscription = async () => {
+    if (!subForm.description || !subForm.amount || !activeSpace || !user) return;
+    const nextRun = (subForm.next_run && /^\d{4}-\d{2}-\d{2}$/.test(subForm.next_run))
+      ? subForm.next_run
+      : new Date().toISOString().split('T')[0];
+    const payload = {
+      type:            'expense',
+      amount:          parseFloat(String(subForm.amount).replace(/,/g, '')) || 0,
+      category:        subForm.category || 'Subscriptions',
+      description:     subForm.description,
+      frequency:       subForm.frequency || 'monthly',
+      next_run:        nextRun,
+      is_subscription: true,
+    };
+    if (editingSub) {
+      const { error } = await supabase.from('recurring_transactions').update(payload).eq('id', editingSub.id);
+      if (error) { console.error(error); return; }
+    } else {
+      const { error } = await supabase.from('recurring_transactions').insert([{
+        ...payload,
+        space_id:   activeSpace.id,
+        created_by: user.id,
+      }]);
+      if (error) { console.error(error); return; }
+    }
+    setSubForm(BLANK_SUB_FORM);
+    setEditingSub(null);
+    setShowSubModal(false);
+    loadRecurringTransactions(activeSpace.id);
+  };
+
+  const handleDeleteSubscription = () => {
+    confirmDelete('Delete Subscription', 'Remove this subscription?', async () => {
+      await supabase.from('recurring_transactions').delete().eq('id', editingSub.id);
+      setEditingSub(null);
+      setSubForm(BLANK_SUB_FORM);
+      setShowSubModal(false);
+      loadRecurringTransactions(activeSpace.id);
+    });
+  };
+
   const handleDeleteBill = (billId) => {
     confirmDelete('Delete Bill', 'Remove this bill?', async () => {
       await supabase.from('bills').delete().eq('id', billId);
@@ -1105,6 +1158,56 @@ export default function DashboardScreen() {
   const handleMarkBillPaid = async (billId) => {
     await supabase.from('bills').update({ is_paid: true, paid_at: new Date().toISOString() }).eq('id', billId);
     loadBills(activeSpace.id);
+  };
+
+  // ── Card Handlers ─────────────────────────────────────────────────────────
+  const BLANK_CARD_FORM = {
+    card_name: '', card_holder_name: '', last_four: '',
+    card_type: 'visa', bank_name: '',
+    card_color_from: '#1a1a2e', card_color_to: '#16213e',
+    credit_limit: '', current_balance: '0',
+    expiry_month: '', expiry_year: '', notes: '',
+  };
+
+  const handleCreateCard = async () => {
+    if (!cardForm.card_name || !user) return;
+    const payload = {
+      user_id:          user.id,
+      card_name:        cardForm.card_name,
+      card_holder_name: cardForm.card_holder_name || null,
+      last_four:        cardForm.last_four || null,
+      card_type:        cardForm.card_type || 'visa',
+      bank_name:        cardForm.bank_name || null,
+      card_color_from:  cardForm.card_color_from || '#1a1a2e',
+      card_color_to:    cardForm.card_color_to   || '#16213e',
+      credit_limit:     parseFloat(String(cardForm.credit_limit).replace(/,/g, '')) || null,
+      current_balance:  parseFloat(String(cardForm.current_balance).replace(/,/g, '')) || 0,
+      expiry_month:     cardForm.expiry_month || null,
+      expiry_year:      cardForm.expiry_year  || null,
+      is_default:       cards.length === 0,   // first card is default
+      notes:            cardForm.notes || null,
+    };
+    if (editingCard) {
+      const { error } = await supabase.from('cards').update(payload).eq('id', editingCard.id);
+      if (error) { console.error(error); return; }
+    } else {
+      const { error } = await supabase.from('cards').insert([payload]);
+      if (error) { console.error(error); return; }
+    }
+    setCardForm(BLANK_CARD_FORM);
+    setEditingCard(null);
+    setShowCardModal(false);
+    loadCards(user.id);
+  };
+
+  const handleDeleteCard = () => {
+    confirmDelete('Delete Card', 'Remove this card from your account?', async () => {
+      await supabase.from('cards').delete().eq('id', editingCard.id);
+      setEditingCard(null);
+      setCardForm(BLANK_CARD_FORM);
+      setShowCardModal(false);
+      loadCards(user.id);
+    });
   };
 
   /** Advance a subscription's next_run by one cycle so the engine won't double-charge */
@@ -1175,7 +1278,11 @@ export default function DashboardScreen() {
   const handleFloatingPress = () => {
     if (activeTab === 'planning') setShowBillsModal(true);
     else if (activeTab === 'profile') setShowSpaceModal(true);
-    else setShowModal(true);
+    else {
+      // Pre-select the currently active card so the user doesn't have to tap it again
+      setTransactionForm((f) => ({ ...f, card_id: selectedCardId ?? null }));
+      setShowModal(true);
+    }
   };
 
   const handleMonthChange = (month, year) => {
@@ -1186,7 +1293,10 @@ export default function DashboardScreen() {
   if (pageLoading) return <AppLoader />;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.primary }]} edges={['top']}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: colors.background }]}
+      edges={['top']}
+    >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header
           displayName={displayName}
@@ -1194,8 +1304,8 @@ export default function DashboardScreen() {
           showNotifications={showNotifications}
           setShowNotifications={setShowNotifications}
           markNotificationsAsRead={markNotificationsAsRead}
-          onLogout={handleLogout}
           onSettingsOpen={() => setShowSettings(true)}
+          onProfileOpen={() => setActiveTab('profile')}
         />
 
         {/* Offline queue banner */}
@@ -1207,8 +1317,8 @@ export default function DashboardScreen() {
           >
             <Text style={styles.offlineBannerText}>
               {isSyncing
-                ? '⏳ Syncing offline transactions…'
-                : `📴 ${pendingSync} transaction${pendingSync > 1 ? 's' : ''} queued offline — tap to sync`}
+                ? 'Syncing offline transactions…'
+                : `${pendingSync} transaction${pendingSync > 1 ? 's' : ''} queued offline — tap to sync`}
             </Text>
           </TouchableOpacity>
         )}
@@ -1223,61 +1333,100 @@ export default function DashboardScreen() {
             <>
               {/* 1. Hero balance card */}
               <BalanceCard
-                summary={summary}
-                monthSummary={monthSummary}
-                selectedMonth={selectedMonth}
-                selectedYear={selectedYear}
-                onMonthChange={handleMonthChange}
+                cards={cards}
+                transactions={transactions}
+                selectedCardId={selectedCardId}
+                onAddCard={() => setShowCardModal(true)}
+                onViewAllCards={() => setShowCardPicker(true)}
+                onCardChange={(card) => setSelectedCardId(card?.id ?? null)}
+                onEditCard={(c) => {
+                  setEditingCard(c);
+                  setCardForm({
+                    card_name:        c.card_name        || '',
+                    card_holder_name: c.card_holder_name || '',
+                    last_four:        c.last_four        || '',
+                    card_type:        c.card_type        || 'visa',
+                    bank_name:        c.bank_name        || '',
+                    card_color_from:  c.card_color_from  || '#1a1a2e',
+                    card_color_to:    c.card_color_to    || '#16213e',
+                    credit_limit:     c.credit_limit ? String(c.credit_limit) : '',
+                    current_balance:  c.current_balance  ? String(c.current_balance) : '0',
+                    expiry_month:     c.expiry_month     || '',
+                    expiry_year:      c.expiry_year      || '',
+                    notes:            c.notes            || '',
+                  });
+                  setShowCardModal(true);
+                }}
               />
 
               {/* 2. Streak summary (compact) */}
               <StreakCard transactions={transactions} budgets={budgets} />
 
-              {/* 3. AI Coach — insights merged in */}
+              {/* 3. Recent activity — shows the active card's transactions (or all if no card) */}
+              <RecentActivity
+                transactions={filteredTransactions}
+                onViewAll={() => setActiveTab('transactions')}
+              />
+
+              {/* 4. AI Coach — card-aware: uses selected card's own transactions for coaching */}
               <CoachSection
                 monthSummary={monthSummary}
                 budgets={budgets}
                 transactions={transactions}
                 monthTransactions={monthTransactions}
                 insights={insights}
+                selectedCard={selectedCard}
+                selectedCardBalance={selectedCardBalance}
+                cardMonthTransactions={filteredMonthTransactions}
               />
 
-              {/* 4. Recent activity — what did I spend? */}
-              <RecentActivity transactions={monthTransactions} />
 
-              {/* 5. Alerts — only rendered when there's something to say */}
-              {alerts.length > 0 && <AlertSection alerts={alerts} />}
 
               {/* ── Discover section (fun / secondary features) ──── */}
               <MemoryCards transactions={transactions} />
-
-              <ChallengesSection transactions={transactions} budgets={budgets} />
             </>
           )}
 
           {/* ── Transactions Tab ──────────────────────────────────────────── */}
           {activeTab === 'transactions' && (
             <>
+              {/* Card filter banner — only shown when a card is selected */}
+              {selectedCard && (
+                <View style={[styles.cardFilterBanner, { backgroundColor: colors.primaryLight, borderColor: colors.primary + '33' }]}>
+                  <Text style={[styles.cardFilterLabel, { color: colors.primary }]}>
+                    💳 Showing: <Text style={{ fontWeight: '800' }}>{selectedCard.bank_name || selectedCard.card_name}</Text>
+                    {selectedCard.last_four ? `  ···· ${selectedCard.last_four}` : ''}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedCardId(null)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.cardFilterClear, { color: colors.primary }]}>✕ Show all</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Unified calendar + transaction timeline */}
               <CalendarTransactionsSection
-                transactions={transactions}
-                monthTransactions={monthTransactions}
+                transactions={filteredTransactions}
+                monthTransactions={filteredMonthTransactions}
                 bills={bills}
                 activeSpace={activeSpace}
                 selectedMonth={selectedMonth}
                 selectedYear={selectedYear}
+                cardBalance={selectedCard ? selectedCardBalance : totalCardsBalance}
                 onMonthChange={handleMonthChange}
                 onAdd={() => setShowModal(true)}
-                onRecurring={() => setShowRecurringModal(true)}
                 onDelete={handleDeleteTransaction}
                 onEdit={(item) => {
                   setEditingTransaction(item);
-                  setTransactionForm({ type: item.type, amount: String(item.amount), category: item.category, description: item.description || '', emoji: item.emoji || '' });
+                  setTransactionForm({ type: item.type, amount: String(item.amount), category: item.category, description: item.description || '', card_id: item.card_id ?? null });
                   setShowModal(true);
                 }}
               />
 
-              {/* Regret Tracker */}
+              {/* Regret Tracker — uses unfiltered month data for overall spending habits */}
               <RegretSection monthTransactions={monthTransactions} />
             </>
           )}
@@ -1324,10 +1473,23 @@ export default function DashboardScreen() {
                 }}
               />
 
-              {/* 3. Upcoming bills */}
+              {/* 3. Bills + Subscriptions (merged) */}
               <BillsSection
                 bills={bills}
+                recurringTransactions={recurringTransactions}
                 onAdd={() => setShowBillsModal(true)}
+                onAddSub={() => setShowSubModal(true)}
+                onEditSub={(sub) => {
+                  setEditingSub(sub);
+                  setSubForm({
+                    description: sub.description || '',
+                    amount:      String(sub.amount),
+                    category:    sub.category || 'Subscriptions',
+                    frequency:   sub.frequency || 'monthly',
+                    next_run:    sub.next_run || todayStr(),
+                  });
+                  setShowSubModal(true);
+                }}
                 onEdit={(bill) => {
                   setEditingBill(bill);
                   setBillForm({
@@ -1339,24 +1501,6 @@ export default function DashboardScreen() {
                 }}
                 onDelete={handleDeleteBill}
                 onMarkPaid={handleMarkBillPaid}
-              />
-
-              {/* 4. Subscriptions */}
-              <SubscriptionSection
-                recurringTransactions={recurringTransactions}
-                onAdd={() => setShowRecurringModal(true)}
-              />
-
-              {/* 5. Recurring auto-logs */}
-              <RecurringSection
-                recurringTransactions={recurringTransactions}
-                onAdd={() => {
-                  setEditingRecurring(null);
-                  setRecurringForm(BLANK_RECURRING_FORM);
-                  setShowRecurringModal(true);
-                }}
-                onEdit={handleEditRecurring}
-                onDelete={handleDeleteRecurring}
               />
             </>
           )}
@@ -1373,7 +1517,12 @@ export default function DashboardScreen() {
                 </View>
               </View>
 
-              {/* 1. Category breakdown — where does the money go? */}
+              {/* 1. Per-card income / expense / balance — top of analytics for quick overview */}
+              {cards.length > 0 && (
+                <CardBreakdownSection cards={cards} transactions={transactions} />
+              )}
+
+              {/* 2. Category breakdown — where does the money go? */}
               <AnalyticsSection
                 transactions={transactions}
                 expenseByCategory={expenseByCategory}
@@ -1383,7 +1532,7 @@ export default function DashboardScreen() {
                 selectedYear={selectedYear}
               />
 
-              {/* 2. Forward-looking cash flow */}
+              {/* 3. Forward-looking cash flow */}
               <CashFlowForecast
                 summary={summary}
                 transactions={transactions}
@@ -1391,7 +1540,7 @@ export default function DashboardScreen() {
                 bills={bills}
               />
 
-              {/* 3. Spending frequency patterns */}
+              {/* 4. Spending frequency patterns */}
               <ExpenseFrequency transactions={transactions} />
             </>
           )}
@@ -1423,15 +1572,22 @@ export default function DashboardScreen() {
                       <Text style={styles.heroName}>{displayName}</Text>
                       <Text style={styles.heroEmail}>{user?.email}</Text>
                       {/* Spending personality chip — tap to expand details */}
-                      <TouchableOpacity
-                        style={styles.heroPersonaChip}
-                        onPress={() => setShowPersonalityModal(true)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.heroPersonaEmoji}>{persona.emoji}</Text>
-                        <Text style={styles.heroPersonaText}>{persona.name}</Text>
-                        <Text style={[styles.heroPersonaText, { opacity: 0.7, fontSize: 10 }]}> ›</Text>
-                      </TouchableOpacity>
+                      {persona ? (
+                        <TouchableOpacity
+                          style={styles.heroPersonaChip}
+                          onPress={() => setShowPersonalityModal(true)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.heroPersonaEmoji}>{persona.emoji}</Text>
+                          <Text style={styles.heroPersonaText}>{persona.name}</Text>
+                          <Text style={[styles.heroPersonaText, { opacity: 0.7, fontSize: 10 }]}> ›</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={[styles.heroPersonaChip, { opacity: 0.7 }]}>
+                          <Text style={styles.heroPersonaEmoji}>🔍</Text>
+                          <Text style={styles.heroPersonaText}>Log 5+ expenses to reveal your type</Text>
+                        </View>
+                      )}
                     </>
                   );
                 })()}
@@ -1513,14 +1669,10 @@ export default function DashboardScreen() {
             </>
           )}
 
-          <View style={{ height: 120 }} />
+          {/* bottom breathing room for floating nav */}
         </ScrollView>
 
-        {activeTab !== 'analytics' && (
-          <FloatingAddButton label={floatingLabel} onPress={handleFloatingPress} />
-        )}
-
-        <BottomNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
+        <BottomNavigation activeTab={activeTab} setActiveTab={setActiveTab} onFloatingPress={handleFloatingPress} />
 
         {/* ── Modals ────────────────────────────────────────────────────────── */}
         <ConfirmModal
@@ -1538,6 +1690,7 @@ export default function DashboardScreen() {
           editingTransaction={editingTransaction}
           transactionForm={transactionForm}
           setTransactionForm={setTransactionForm}
+          cards={cards}
           onSubmit={handleAddTransaction}
           onDelete={(id) => {
             setShowModal(false);
@@ -1588,26 +1741,6 @@ export default function DashboardScreen() {
           onSubmit={handleInviteMember}
           onClose={() => setShowInviteModal(false)}
         />
-        <RecurringModal
-          visible={showRecurringModal}
-          recurringForm={recurringForm}
-          setRecurringForm={setRecurringForm}
-          isEditing={!!editingRecurring}
-          onSubmit={editingRecurring ? handleUpdateRecurring : handleCreateRecurring}
-          onDelete={() => {
-            if (!editingRecurring) return;
-            const id = editingRecurring.id;
-            setShowRecurringModal(false);
-            setEditingRecurring(null);
-            setRecurringForm(BLANK_RECURRING_FORM);
-            handleDeleteRecurring(id);
-          }}
-          onClose={() => {
-            setShowRecurringModal(false);
-            setEditingRecurring(null);
-            setRecurringForm(BLANK_RECURRING_FORM);
-          }}
-        />
         <BillsModal
           visible={showBillsModal}
           billForm={billForm}
@@ -1620,6 +1753,39 @@ export default function DashboardScreen() {
             handleDeleteBill(id);
           }}
           onClose={() => { setShowBillsModal(false); setEditingBill(null); }}
+        />
+
+        {/* ── Subscription Modal ───────────────────────────────────────────── */}
+        <SubscriptionModal
+          visible={showSubModal}
+          subForm={subForm}
+          setSubForm={setSubForm}
+          editingSub={editingSub}
+          onSubmit={handleCreateSubscription}
+          onDelete={editingSub ? handleDeleteSubscription : undefined}
+          onClose={() => { setShowSubModal(false); setEditingSub(null); setSubForm(BLANK_SUB_FORM); }}
+        />
+
+        {/* ── Card Modal ────────────────────────────────────────────────────── */}
+        <CardModal
+          visible={showCardModal}
+          cardForm={cardForm}
+          setCardForm={setCardForm}
+          editingCard={editingCard}
+          onSubmit={handleCreateCard}
+          onClose={() => { setShowCardModal(false); setEditingCard(null); }}
+          onDelete={handleDeleteCard}
+        />
+
+        {/* ── Card Picker Modal ─────────────────────────────────────────────── */}
+        <CardPickerModal
+          visible={showCardPicker}
+          cards={cards}
+          transactions={transactions}
+          selectedCardId={selectedCardId}
+          onSelect={(card) => setSelectedCardId(card.id)}
+          onAdd={() => setShowCardModal(true)}
+          onClose={() => setShowCardPicker(false)}
         />
 
         {/* ── Settings Modal ───────────────────────────────────────────────── */}
@@ -1739,7 +1905,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   container: { flex: 1 },
   scrollView: { flex: 1 },
-  scrollContent: { paddingBottom: 16 },
+  scrollContent: { paddingBottom: 140 },
 
   offlineBanner: {
     backgroundColor: '#1e40af',
@@ -1940,5 +2106,29 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     marginBottom: 16,
+  },
+
+  // ── Card filter banner (transactions tab) ─────────────────────────────────
+  cardFilterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  cardFilterLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  cardFilterClear: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 8,
   },
 });

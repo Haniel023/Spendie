@@ -353,11 +353,12 @@ export function generateInactivityMessage(personality = 'supportive') {
  * Generate a coach comment based on personality and financial state.
  *
  * @param {object} opts
- * @param {string} opts.personality  - one of PERSONALITY_ORDER keys
- * @param {object} opts.monthSummary - { income, expenses, balance }
- * @param {Array}  opts.budgets      - budget objects
- * @param {Array}  opts.transactions - all transactions
+ * @param {string} opts.personality       - one of PERSONALITY_ORDER keys
+ * @param {object} opts.monthSummary      - { income, expenses, balance }
+ * @param {Array}  opts.budgets           - budget objects
+ * @param {Array}  opts.transactions      - all transactions
  * @param {Array}  opts.monthTransactions - this month's transactions
+ * @param {number|null} opts.cardBalance  - live balance of selected card (null = no card)
  * @returns {{ icon, title, text }}
  */
 export function generateCoachComment({
@@ -366,6 +367,7 @@ export function generateCoachComment({
   budgets = [],
   transactions = [],
   monthTransactions = [],
+  cardBalance = null,
 }) {
   const responses = RESPONSES[personality] ?? RESPONSES.supportive;
 
@@ -378,8 +380,16 @@ export function generateCoachComment({
   // No data yet
   if (monthTransactions.length === 0) return responses.noData();
 
-  // Overspending
-  if (saved < 0) return responses.negative(Math.abs(saved));
+  // "Overspending" check — but only trigger negative message when the card balance
+  // is actually in trouble. If the user has a healthy card balance and just hasn't
+  // logged income this month (income = 0, small expense), the card covers it fine.
+  if (saved < 0) {
+    // Card has a healthy balance and the month's shortfall is < 10% of it → not alarming
+    if (cardBalance !== null && cardBalance > 0 && Math.abs(saved) < cardBalance * 0.1) {
+      return responses.neutral();
+    }
+    return responses.negative(Math.abs(saved));
+  }
 
   // Zero balance mid-month (income = expenses, nothing left)
   if (balance === 0 && totalIncome > 0 && totalExpenses > 0) {

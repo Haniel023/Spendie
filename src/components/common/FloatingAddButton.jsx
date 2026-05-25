@@ -22,7 +22,7 @@ export default function FloatingAddButton({ label, onPress }) {
 const styles = StyleSheet.create({
   btn: {
     position: 'absolute',
-    bottom: 104,
+    bottom: 112,
     right: 20,
     flexDirection: 'row',
     alignItems: 'center',

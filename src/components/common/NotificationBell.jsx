@@ -10,6 +10,8 @@ export default function NotificationBell({
   showNotifications,
   setShowNotifications,
   markNotificationsAsRead,
+  iconColor,
+  iconBg,
 }) {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -21,8 +23,12 @@ export default function NotificationBell({
 
   return (
     <View>
-      <TouchableOpacity style={styles.iconBtn} onPress={handleOpen} accessibilityLabel="Notifications">
-        <Bell size={18} color={colors.white} />
+      <TouchableOpacity
+        style={[styles.iconBtn, iconBg ? { backgroundColor: iconBg } : null]}
+        onPress={handleOpen}
+        accessibilityLabel="Notifications"
+      >
+        <Bell size={17} color={iconColor ?? colors.white} strokeWidth={2} />
         {unreadCount > 0 && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{unreadCount}</Text>
@@ -65,9 +71,9 @@ export default function NotificationBell({
 
 const styles = StyleSheet.create({
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 11,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',

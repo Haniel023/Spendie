@@ -9,15 +9,20 @@ import { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Pressable,
 } from 'react-native';
-import { Trophy, Lock, X, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Trophy, Lock, X, CheckCircle, ChevronDown, ChevronUp, Rocket, Flame, PiggyBank, Shield, ClipboardList, Star, HelpCircle } from 'lucide-react-native';
 import { ACHIEVEMENTS } from '../../lib/achievementsEngine';
 import { formatUnlockDate } from '../../lib/achievementTimestamps';
 import { useTheme } from '../../lib/ThemeContext';
 
 const CATEGORY_ORDER = ['Getting Started', 'Consistency', 'Savings', 'Budgeting', 'Planning', 'Challenges', 'Mystery'];
-const CATEGORY_EMOJI = {
-  'Getting Started': '🚀', 'Consistency': '🔥', 'Savings': '💰',
-  'Budgeting': '🛡️', 'Planning': '📋', 'Challenges': '🏆', 'Mystery': '❓',
+const CATEGORY_ICONS = {
+  'Getting Started': Rocket,
+  'Consistency':     Flame,
+  'Savings':         PiggyBank,
+  'Budgeting':       Shield,
+  'Planning':        ClipboardList,
+  'Challenges':      Star,
+  'Mystery':         HelpCircle,
 };
 
 // ── Badge Detail Modal ─────────────────────────────────────────────────────────
@@ -50,8 +55,9 @@ function BadgeDetailModal({ badge, unlocked, unlockedDate, onClose, colors, radi
           </View>
 
           <View style={[styles.categoryPill, { backgroundColor: colors.primaryLight }]}>
+            {(() => { const CatIcon = CATEGORY_ICONS[badge.category] ?? Star; return <CatIcon size={11} color={colors.primary} />; })()}
             <Text style={[styles.categoryPillText, { color: colors.primary }]}>
-              {CATEGORY_EMOJI[badge.category]}  {badge.category}
+              {badge.category}
             </Text>
           </View>
 
@@ -232,9 +238,10 @@ export default function AchievementsSection({ unlockedIds = [], timestamps = {} 
             return (
               <View key={cat} style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-                    {CATEGORY_EMOJI[cat]}  {cat}
-                  </Text>
+                  <View style={styles.sectionTitleRow}>
+                    {(() => { const CatIcon = CATEGORY_ICONS[cat] ?? Star; return <CatIcon size={13} color={colors.textSecondary} />; })()}
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{cat}</Text>
+                  </View>
                   <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{catUnlocked}/{items.length}</Text>
                 </View>
                 <View style={styles.badgeRow}>
@@ -331,6 +338,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   sectionTitle: { fontSize: 11, fontWeight: '700' },
   sectionCount: { fontSize: 10 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
@@ -388,6 +396,7 @@ const styles = StyleSheet.create({
   },
   modalEmoji: { fontSize: 44 },
   categoryPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 10, paddingVertical: 3,
     borderRadius: 20, marginBottom: 10,
   },

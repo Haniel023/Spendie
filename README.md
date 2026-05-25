@@ -34,11 +34,12 @@ Whether you're budgeting solo or managing finances with a partner, Spendie keeps
 
 ### 🏠 Home — Overview
 - Running balance card with **Focus Mode** (blur toggle)
+- **💳 Card Accounts** — add debit/credit/e-wallet cards as swipeable bank card widgets
 - Monthly income / expenses / saved breakdown
 - `‹ Month Year ›` navigator for any past month
 - Smart financial alerts & personality-aware insights
 - **Streak System** — Logging · No-Spend · Budget
-- **🤗 AI Financial Coach** with 6 personalities
+- **🤗 AI Financial Coach** with 6 personalities (card-aware)
 - **📸 Memory Cards** — "1 year ago today..."
 - **🏅 Community Challenges** — Join & track progress
 
@@ -47,6 +48,7 @@ Whether you're budgeting solo or managing finances with a partner, Spendie keeps
 
 ### 💸 Log — Transactions
 - Calendar + timeline feed — tap any day to filter
+- **Card filter** — select a card to scope the entire feed to that account
 - Daily income + expense totals per day group
 - Color-coded category icons & PH-timezone timestamps
 - 24 categories across 6 groups
@@ -61,7 +63,7 @@ Whether you're budgeting solo or managing finances with a partner, Spendie keeps
 
 ### 🎯 Plan — Bills, Subs & Goals
 - Bills tracker: 🔴 Overdue · 🟠 Upcoming · ✅ Paid
-- Subscription manager with 15 quick-add presets
+- Subscription manager with 15 quick-add presets + **edit & delete**
 - Monthly subscription cost total + renewal urgency
 - Budget categories with visual progress bars
 - Savings goals with timeline projector
@@ -70,11 +72,13 @@ Whether you're budgeting solo or managing finances with a partner, Spendie keeps
 <td width="50%">
 
 ### 📊 Trends — Analytics & Forecast
+- **💳 Card Breakdown** — per-card income / expense / balance at a glance
 - Monthly calendar with income/expense/bill dots
 - **4-month Cash Flow Forecast** chart
 - Category Trends — month-vs-month % change
 - Monthly income vs expenses bar chart
 - Pie chart breakdown by spending category
+- All charts & cards fully theme-aware (all 14 themes)
 
 </td>
 </tr>
@@ -108,6 +112,22 @@ Whether you're budgeting solo or managing finances with a partner, Spendie keeps
 
 ## 🆕 Major Updates
 
+### 💳 Card Accounts
+Add your real-world debit, credit, and e-wallet cards to Spendie. Each card lives as a styled bank-card widget in a swipeable carousel on the home screen. Cards are per-user (not per-space) and track a live running balance computed from all linked transactions.
+
+| Feature | Description |
+|---|---|
+| **Bank card widget** | Gradient card showing bank name, masked number `···· 1234`, holder name, and expiry |
+| **6 color presets** | Midnight · Ocean · Forest · Rose · Violet · Gold |
+| **Swipeable carousel** | Horizontal scroll in the BalanceCard hero; `+` ghost card opens the add form |
+| **Card selector modal** | Full-screen card picker — tap any card to filter the whole app |
+| **Live balance** | `opening_balance + Σ income − Σ expenses` computed from linked transactions |
+| **Per-card filtering** | Selecting a card scopes transactions, AI coach, and spending insights to that card only |
+| **Persistent selection** | Last selected card saved to AsyncStorage — survives refresh and app re-open |
+| **Card Breakdown analytics** | Per-card income / expense / balance bars at the top of the Trends tab |
+
+> Cards are per-user (`user_id`) — shared across all spaces.
+
 ### 🤖 AI Financial Coach — 6 Personalities
 A full coaching layer that adapts its tone to how you want to be coached. Generates real-time commentary when you log transactions, set budgets, add goals, or hit ₱0 balance — all shaped by the personality you pick.
 
@@ -119,6 +139,8 @@ A full coaching layer that adapts its tone to how you want to be coached. Genera
 | 📊 Corporate Analyst | Data-driven, KPI-speak |
 | ⚡ Anime Mentor | Dramatic power-level energy |
 | 🍃 Calm Minimalist | Short, zen, distraction-free |
+
+**Card-aware coaching:** When a card is selected, the coach uses only that card's monthly transactions and live balance for its analysis — preventing false "overspending" alerts when the card balance is healthy. If a selected card has no transactions this month, each personality delivers a unique "card ready, no activity yet" message. Spending insights in the collapsible feed are also scoped to the active card.
 
 ### 🔔 Push Notifications
 Local push notification system covering every important financial event:
@@ -152,6 +174,19 @@ Nostalgic financial flashbacks — "One year ago today you spent ₱X on…", ye
 
 ### 💸 Payday Celebration
 24-particle confetti animation with a glowing banner fires automatically whenever an income transaction is logged. Once per transaction, never repeats.
+
+### 🎨 Full Theme Coverage — All 14 Themes
+Every analytics component, spending insight card, and AI coach element adapts to the active theme. No more hardcoded colors clashing on dark or neon themes.
+
+| Component | Before | After |
+|---|---|---|
+| Spending insights (coach) | Hardcoded light pastels | `colors.expense` / `colors.income` / `colors.primary` opacity tints |
+| Chart config (Pie + Bar) | Static hex | `hexToRgb(colors.primary)` — follows any theme |
+| Category Trends card | Static palette | Full `useTheme()` |
+| Expense Frequency heatmap | Hardcoded greys | Full `useTheme()` |
+| Analytics Summary chips | Hardcoded backgrounds | Full `useTheme()` |
+| AI coach insight text | `#374151` (dark grey) | `colors.textPrimary` |
+| Card balance context row | `#fee2e2` on red | `colors.expense + '18'` tint |
 
 ### 🌍 14 Themes + Seasonal Auto-Themes
 8 standard themes plus 6 seasonal themes (Christmas, Halloween, Valentine's, Summer, Rainy Day, New Year) that auto-activate on Philippines calendar dates. Toggle auto-switching in Settings.
@@ -405,11 +440,15 @@ Spendie/
         │   ├── PaydayCelebration.jsx   # 24-particle confetti celebration
         │   ├── NotificationBell.jsx
         │   ├── AppLoader.jsx
+        │   ├── CategoryIcon.jsx        # Reusable themed category icon
+        │   ├── GlassView.jsx           # Glass-morphism utility wrapper
         │   └── ConfirmModal.jsx
         ├── dashboard/
-        │   ├── BalanceCard.jsx         # Gradient card + Focus Mode blur + animation
+        │   ├── BalanceCard.jsx         # Hero balance + swipeable card carousel
+        │   ├── CardCarousel.jsx        # Horizontal bank card widgets + add/edit
+        │   ├── CardBreakdownSection.jsx # Per-card income/expense/balance bars
         │   ├── StreakCard.jsx           # Logging / no-spend / budget streaks (PH timezone)
-        │   ├── CoachSection.jsx        # AI coach display + personality picker modal
+        │   ├── CoachSection.jsx        # AI coach — card-aware, theme-aware insights
         │   ├── ChallengesSection.jsx   # Community challenges browser + progress
         │   ├── MemoryCards.jsx         # Horizontal nostalgic memory cards
         │   ├── RegretSection.jsx       # Transaction rating UI + regret analytics
@@ -424,7 +463,10 @@ Spendie/
         │   ├── CalendarView.jsx
         │   ├── CashFlowForecast.jsx    # 4-month balance projection chart
         │   ├── CategoryTrends.jsx      # Month-vs-month category comparison
-        │   ├── AnalyticsSection.jsx
+        │   ├── AnalyticsSection.jsx    # Pie + bar charts, theme-aware
+        │   ├── AnalyticsSummary.jsx    # Monthly summary chips, theme-aware
+        │   ├── TopCategories.jsx       # Top spending categories bar, theme-aware
+        │   ├── ExpenseFrequency.jsx    # Day/time spending heatmap, theme-aware
         │   ├── MonthlyTrendChart.jsx
         │   ├── MonthlyReview.jsx       # End-of-month Wrapped (day 30/31)
         │   ├── AchievementsSection.jsx
@@ -437,6 +479,9 @@ Spendie/
             ├── TransactionModal.jsx    # Add/edit with delete inside modal
             ├── RecurringModal.jsx      # Day-of-month grid + day-of-week chips
             ├── BillsModal.jsx
+            ├── SubscriptionModal.jsx   # Add/edit/delete subscriptions
+            ├── CardModal.jsx           # Add/edit card with live preview
+            ├── CardPickerModal.jsx     # Full-screen card selector
             ├── BudgetModal.jsx
             ├── GoalModal.jsx
             ├── SpaceModal.jsx
@@ -526,6 +571,32 @@ Spendie/
 | frequency | varchar(50) | nullable |
 | emoji | varchar(10) | nullable |
 | notes | text | nullable |
+
+### `cards`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| user_id | uuid | FK → auth.users (per-user, not per-space) |
+| card_name | varchar(200) | nickname |
+| card_holder_name | varchar(200) | nullable |
+| last_four | varchar(4) | nullable — last 4 digits |
+| card_type | varchar(50) | `visa` / `mastercard` / `amex` / `gcash` / `maya` / `other` |
+| bank_name | varchar(200) | nullable |
+| card_color_from | varchar(7) | gradient start hex |
+| card_color_to | varchar(7) | gradient end hex |
+| credit_limit | decimal | nullable |
+| current_balance | decimal | opening / base balance |
+| expiry_month | varchar(2) | nullable |
+| expiry_year | varchar(4) | nullable |
+| is_default | boolean | default false |
+| notes | text | nullable |
+
+> **Live balance** is computed client-side: `current_balance + Σ income − Σ expenses` filtered by `card_id` on the `transactions` table.
+
+> **Migration required:** add `card_id` column to transactions:
+> ```sql
+> ALTER TABLE transactions ADD COLUMN IF NOT EXISTS card_id uuid REFERENCES cards(id) ON DELETE SET NULL;
+> ```
 
 ### `net_worth_entries`
 | Column | Type | Notes |
@@ -642,6 +713,7 @@ Some features are stored on-device only (no DB required):
 | Regret ratings | `@spendie_regret_ratings_v1` | `{ [transactionId]: 'worth_it' \| 'neutral' \| 'regret' }` |
 | Theme preference | `@spendie_theme` | Active theme ID |
 | Achievement timestamps | `@spendie_achievement_timestamps` | First unlock dates |
+| Selected card | `@spendie_selected_card_id` | Last active card ID — restored on app open |
 
 ---
 

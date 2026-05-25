@@ -1,32 +1,57 @@
-import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable } from 'react-native';
-import { Plus, Pencil, X, ChevronDown, ChevronUp } from 'lucide-react-native';
-import { getPHNow } from '../../lib/timezone';
-import { colors, spacing, radius, shadow, typography } from '../../lib/theme';
+/**
+ * GoalsSection — 2-column grid of goal cards with SVG ring progress.
+ * Each card is tappable to expand details. Timeline modal preserved.
+ */
 
-// ── Timeline helper ───────────────────────────────────────────────────────────
+import { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
+import Svg, { Circle, G } from 'react-native-svg';
+import { Plus, Pencil, Target, X, CalendarDays } from 'lucide-react-native';
+import { useTheme } from '../../lib/ThemeContext';
+import { getPHNow } from '../../lib/timezone';
+
+// ── SVG ring (same pattern as BudgetSection) ──────────────────────────────────
+
+function RingProgress({ pct, size = 56, color, strokeWidth = 5 }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  const r       = (size - strokeWidth) / 2;
+  const cx      = size / 2;
+  const circ    = 2 * Math.PI * r;
+  const filled  = (clamped / 100) * circ;
+
+  return (
+    <Svg width={size} height={size}>
+      <Circle cx={cx} cy={cx} r={r} stroke="rgba(0,0,0,0.08)" strokeWidth={strokeWidth} fill="none" />
+      <G rotation={-90} origin={`${cx},${cx}`}>
+        <Circle
+          cx={cx} cy={cx} r={r}
+          stroke={color} strokeWidth={strokeWidth} fill="none"
+          strokeDasharray={[filled, circ - filled]}
+          strokeLinecap="round"
+        />
+      </G>
+    </Svg>
+  );
+}
+
+// ── Timeline modal (goal savings plan) ───────────────────────────────────────
 
 function computeTimeline(goal) {
   const remaining = Number(goal.target_amount) - Number(goal.current_amount);
   if (remaining <= 0) return null;
 
-  const results = [];
   const saveAmounts = [500, 1000, 2000, 3000, 5000];
-
-  saveAmounts.forEach((monthly) => {
-    const months = Math.ceil(remaining / monthly);
+  const results = saveAmounts.map((monthly) => {
+    const months    = Math.ceil(remaining / monthly);
     const reachDate = new Date(getPHNow());
     reachDate.setMonth(reachDate.getMonth() + months);
-    results.push({
+    return {
       monthly,
       months,
-      reachDate: reachDate.toLocaleDateString('en-PH', {
-        month: 'short', year: 'numeric',
-      }),
-    });
+      reachDate: reachDate.toLocaleDateString('en-PH', { month: 'short', year: 'numeric' }),
+    };
   });
 
-  // If there's a deadline, compute required monthly savings
   let requiredMonthly = null;
   if (goal.deadline) {
     const now      = getPHNow();
@@ -36,65 +61,70 @@ function computeTimeline(goal) {
     requiredMonthly = remaining / months;
   }
 
-  return { results, requiredMonthly };
+  return { results, requiredMonthly, remaining };
 }
 
-// ── Timeline Modal ────────────────────────────────────────────────────────────
-
-function TimelineModal({ goal, onClose }) {
+function TimelineModal({ goal, colors, onClose }) {
   if (!goal) return null;
   const data = computeTimeline(goal);
   if (!data) return null;
-
-  const { results, requiredMonthly } = data;
-  const remaining = Number(goal.target_amount) - Number(goal.current_amount);
+  const { results, requiredMonthly, remaining } = data;
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.overlayBg} onPress={onClose}>
-        <Pressable style={styles.timelineSheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.sheetHandle} />
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={[styles.sheet, { backgroundColor: colors.card }]} onPress={() => {}}>
+          <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
 
-          <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose}>
+          <TouchableOpacity style={styles.sheetClose} onPress={onClose}>
             <X size={18} color={colors.textSecondary} />
           </TouchableOpacity>
 
-          <Text style={styles.sheetTitle}>📅 Goal Timeline</Text>
-          <Text style={styles.sheetGoalName}>{goal.title}</Text>
-          <Text style={styles.sheetRemaining}>
+          <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>📅 Goal Timeline</Text>
+          <Text style={[styles.sheetGoalName, { color: colors.primary }]}>{goal.title}</Text>
+          <Text style={[styles.sheetRemaining, { color: colors.textSecondary }]}>
             ₱{remaining.toLocaleString('en-PH', { minimumFractionDigits: 2 })} remaining
           </Text>
 
           {requiredMonthly !== null && (
-            <View style={styles.requiredBox}>
-              <Text style={styles.requiredLabel}>Required to hit deadline</Text>
-              <Text style={styles.requiredAmount}>
+            <View style={[styles.requiredBox, { backgroundColor: colors.primaryLight, borderLeftColor: colors.primary }]}>
+              <Text style={[styles.requiredLabel, { color: colors.primary }]}>Required to hit deadline</Text>
+              <Text style={[styles.requiredAmt, { color: colors.primary }]}>
                 ₱{requiredMonthly.toLocaleString('en-PH', { minimumFractionDigits: 2 })}/month
               </Text>
-              <Text style={styles.requiredDeadline}>by {goal.deadline}</Text>
+              <Text style={[styles.requiredDeadline, { color: colors.textSecondary }]}>by {goal.deadline}</Text>
             </View>
           )}
 
-          <Text style={styles.tlSectionLabel}>Savings plan options</Text>
-          {results.map((r) => (
-            <View key={r.monthly} style={styles.tlRow}>
-              <View style={styles.tlLeft}>
-                <Text style={styles.tlMonthly}>₱{r.monthly.toLocaleString()}/mo</Text>
-                <Text style={styles.tlMonths}>{r.months} month{r.months !== 1 ? 's' : ''}</Text>
-              </View>
-              <View style={styles.tlRight}>
-                <Text style={styles.tlReach}>Reach by</Text>
-                <Text style={styles.tlDate}>{r.reachDate}</Text>
-              </View>
-              {/* Mini progress indicator */}
-              <View style={styles.tlBarBg}>
-                <View style={[styles.tlBarFill, { width: `${Math.min(100, (1 / r.months) * 100 * 3)}%` }]} />
-              </View>
-            </View>
-          ))}
+          <Text style={[styles.tlLabel, { color: colors.textSecondary }]}>Savings plan options</Text>
 
-          <TouchableOpacity style={styles.sheetDoneBtn} onPress={onClose}>
-            <Text style={styles.sheetDoneBtnText}>Got it</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {results.map((r) => (
+              <View key={r.monthly} style={[styles.tlRow, { backgroundColor: colors.background }]}>
+                <View style={styles.tlLeft}>
+                  <Text style={[styles.tlMonthly, { color: colors.textPrimary }]}>
+                    ₱{r.monthly.toLocaleString()}/mo
+                  </Text>
+                  <Text style={[styles.tlMonths, { color: colors.textMuted }]}>
+                    {r.months} month{r.months !== 1 ? 's' : ''}
+                  </Text>
+                </View>
+                <View style={styles.tlRight}>
+                  <Text style={[styles.tlReach, { color: colors.textMuted }]}>Reach by</Text>
+                  <Text style={[styles.tlDate, { color: colors.primary }]}>{r.reachDate}</Text>
+                </View>
+                <View style={[styles.tlBarBg, { backgroundColor: colors.border }]}>
+                  <View style={[styles.tlBarFill, { backgroundColor: colors.primary, width: `${Math.min(100, (1 / r.months) * 100 * 3)}%` }]} />
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={[styles.doneBtn, { backgroundColor: colors.primary }]}
+            onPress={onClose}
+          >
+            <Text style={styles.doneBtnText}>Got it</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
@@ -102,101 +132,175 @@ function TimelineModal({ goal, onClose }) {
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// ── Single goal card ──────────────────────────────────────────────────────────
+
+function GoalCard({ goal, onEdit, colors, onShowTimeline }) {
+  const [open, setOpen] = useState(false);
+
+  const target    = Number(goal.target_amount);
+  const current   = Number(goal.current_amount);
+  const pct       = target > 0 ? Math.min((current / target) * 100, 100) : 0;
+  const completed = current >= target;
+  const remaining = Math.max(target - current, 0);
+
+  // Deadline label
+  let deadlineLabel = null;
+  let urgent = false;
+  if (goal.deadline && !completed) {
+    const now      = getPHNow();
+    const deadline = new Date(goal.deadline);
+    const days     = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
+    if (days < 0)       deadlineLabel = 'Overdue!';
+    else if (days <= 7) { deadlineLabel = `${days}d left`; urgent = true; }
+    else if (days <= 30) deadlineLabel = `${days}d left`;
+    else                 deadlineLabel = `${Math.ceil(days / 30)}mo left`;
+  }
+
+  const ringColor = completed
+    ? colors.income
+    : pct >= 75
+      ? colors.primary
+      : colors.primary;
+
+  return (
+    <TouchableOpacity
+      onPress={() => setOpen((v) => !v)}
+      activeOpacity={0.75}
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.card,
+          borderColor: open ? ringColor + '55' : colors.border,
+          borderWidth: open ? 1.5 : 1,
+        },
+      ]}
+    >
+      {/* Ring with emoji or icon center */}
+      <View style={styles.ringWrap}>
+        <RingProgress pct={pct} size={56} color={ringColor} />
+        <View style={[styles.ringIcon, { backgroundColor: ringColor + '15' }]}>
+          {goal.emoji
+            ? <Text style={{ fontSize: 16 }}>{goal.emoji}</Text>
+            : <Target size={14} color={ringColor} strokeWidth={2} />
+          }
+        </View>
+      </View>
+
+      <Text style={[styles.cardName, { color: colors.textPrimary }]} numberOfLines={2}>
+        {goal.title}
+      </Text>
+
+      <Text style={[styles.cardPct, { color: ringColor }]}>
+        {completed ? '✓' : `${pct.toFixed(0)}%`}
+      </Text>
+
+      <Text style={[styles.cardAmts, { color: colors.textMuted }]} numberOfLines={2}>
+        ₱{Math.round(current).toLocaleString()}
+        {'\n'}
+        <Text style={{ color: colors.textSecondary }}>/ ₱{Math.round(target).toLocaleString()}</Text>
+      </Text>
+
+      {deadlineLabel && (
+        <View style={[styles.deadlineBadge, { backgroundColor: urgent ? colors.expenseLight : colors.primaryLight }]}>
+          <Text style={[styles.deadlineText, { color: urgent ? colors.expense : colors.primary }]}>
+            {deadlineLabel}
+          </Text>
+        </View>
+      )}
+
+      {completed && (
+        <View style={[styles.doneBadge, { backgroundColor: colors.incomeLight }]}>
+          <Text style={[styles.doneText, { color: colors.income }]}>✅ Done</Text>
+        </View>
+      )}
+
+      {/* Inline expanded */}
+      {open && (
+        <View style={[styles.expanded, { borderTopColor: colors.border }]}>
+          {!completed && (
+            <Text style={[styles.expandedAmt, { color: colors.primary }]}>
+              ₱{remaining.toLocaleString('en-PH', { maximumFractionDigits: 0 })} to go
+            </Text>
+          )}
+          <View style={styles.expandedActions}>
+            {!completed && (
+              <TouchableOpacity
+                style={[styles.tlBtn, { backgroundColor: colors.primaryLight }]}
+                onPress={() => { setOpen(false); onShowTimeline(goal); }}
+              >
+                <CalendarDays size={11} color={colors.primary} />
+                <Text style={[styles.tlBtnText, { color: colors.primary }]}>Plan</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.editBtn, { backgroundColor: colors.primaryLight }]}
+              onPress={() => { setOpen(false); onEdit(goal); }}
+            >
+              <Pencil size={11} color={colors.primary} />
+              <Text style={[styles.editBtnText, { color: colors.primary }]}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+// ── Section ───────────────────────────────────────────────────────────────────
 
 export default function GoalsSection({ goals, onCreateGoal, onEditGoal, onDeleteGoal }) {
+  const { colors } = useTheme();
   const [timelineGoal, setTimelineGoal] = useState(null);
 
   return (
-    <View style={styles.card}>
+    <View style={styles.wrapper}>
+      {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Savings Goals</Text>
-          <Text style={styles.subtitle}>Track your financial goals</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Savings Goals</Text>
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>Track your targets</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={onCreateGoal}>
-          <Plus size={14} color={colors.primary} />
-          <Text style={styles.addBtnText}>Goal</Text>
+        <TouchableOpacity
+          style={[styles.addBtn, { borderColor: colors.primary }]}
+          onPress={onCreateGoal}
+        >
+          <Plus size={13} color={colors.primary} />
+          <Text style={[styles.addBtnText, { color: colors.primary }]}>Add</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Empty state */}
       {goals.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyIcon}>🎯</Text>
-          <Text style={styles.emptyTitle}>No goals yet</Text>
-          <Text style={styles.emptyText}>Create your first savings goal.</Text>
-        </View>
+        <TouchableOpacity
+          onPress={onCreateGoal}
+          activeOpacity={0.75}
+          style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <Target size={24} color={colors.textMuted} strokeWidth={1.5} />
+          <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>No goals yet</Text>
+          <Text style={[styles.emptyHint, { color: colors.primary }]}>Tap to add a goal</Text>
+        </TouchableOpacity>
       ) : (
-        goals.map((goal) => {
-          const target    = Number(goal.target_amount);
-          const current   = Number(goal.current_amount);
-          const pct       = target > 0 ? Math.min((current / target) * 100, 100) : 0;
-          const completed = current >= target;
-          const remaining = Math.max(target - current, 0);
-
-          // Deadline distance
-          let deadlineLabel = null;
-          let deadlineUrgent = false;
-          if (goal.deadline && !completed) {
-            const now      = getPHNow();
-            const deadline = new Date(goal.deadline);
-            const daysLeft = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
-            if (daysLeft < 0)      deadlineLabel = 'Overdue!';
-            else if (daysLeft <= 7)  { deadlineLabel = `${daysLeft}d left`; deadlineUrgent = true; }
-            else if (daysLeft <= 30) { deadlineLabel = `${daysLeft}d left`; }
-            else {
-              const months = Math.ceil(daysLeft / 30);
-              deadlineLabel = `${months}mo left`;
-            }
-          }
-
-          return (
-            <View key={goal.id} style={styles.goalCard}>
-              <View style={styles.goalTop}>
-                <View style={styles.goalInfo}>
-                  <Text style={styles.goalTitle}>{goal.title}</Text>
-                  <Text style={styles.goalAmount}>
-                    ₱{current.toFixed(2)} / ₱{target.toFixed(2)}
-                  </Text>
-                  {goal.deadline && (
-                    <Text style={[styles.deadline, deadlineUrgent && styles.deadlineUrgent]}>
-                      📅 {goal.deadline}{deadlineLabel ? ` · ${deadlineLabel}` : ''}
-                    </Text>
-                  )}
-                  {!completed && remaining > 0 && (
-                    <Text style={styles.remaining}>₱{remaining.toFixed(2)} to go</Text>
-                  )}
-                </View>
-                <View style={styles.goalActions}>
-                  {completed && <Text style={styles.completedBadge}>✅ Done</Text>}
-                  {!completed && (
-                    <TouchableOpacity
-                      style={styles.timelineBtn}
-                      onPress={() => setTimelineGoal(goal)}
-                    >
-                      <Text style={styles.timelineBtnText}>📅 Plan</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity style={styles.editBtn} onPress={() => onEditGoal(goal)}>
-                    <Pencil size={13} color={colors.primary} />
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Progress bar */}
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${pct}%` }, completed && styles.progressComplete]} />
-              </View>
-              <Text style={styles.pctLabel}>{pct.toFixed(0)}%</Text>
-            </View>
-          );
-        })
+        <View style={styles.grid}>
+          {goals.map((g) => (
+            <GoalCard
+              key={g.id}
+              goal={g}
+              onEdit={onEditGoal}
+              colors={colors}
+              onShowTimeline={setTimelineGoal}
+            />
+          ))}
+        </View>
       )}
 
       {/* Timeline modal */}
       {timelineGoal && (
-        <TimelineModal goal={timelineGoal} onClose={() => setTimelineGoal(null)} />
+        <TimelineModal
+          goal={timelineGoal}
+          colors={colors}
+          onClose={() => setTimelineGoal(null)}
+        />
       )}
     </View>
   );
@@ -205,101 +309,123 @@ export default function GoalsSection({ goals, onCreateGoal, onEditGoal, onDelete
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    ...shadow.card,
+  wrapper: { marginHorizontal: 20, marginBottom: 10 },
+
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    marginBottom: 12,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md },
-  title: { ...typography.h3 },
-  subtitle: { ...typography.small },
-  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1.5, borderColor: colors.primary, borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 5 },
-  addBtnText: { fontSize: 12, fontWeight: '600', color: colors.primary },
-  empty: { alignItems: 'center', paddingVertical: spacing.xl },
-  emptyIcon: { fontSize: 32, marginBottom: spacing.sm },
-  emptyTitle: { ...typography.h3, marginBottom: spacing.xs },
-  emptyText: { ...typography.body, textAlign: 'center' },
+  title:    { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  subtitle: { fontSize: 11, marginTop: 2 },
+  addBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderWidth: 1.5, borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  addBtnText: { fontSize: 12, fontWeight: '600' },
 
-  goalCard: { marginBottom: spacing.md },
-  goalTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
-  goalInfo: { flex: 1, marginRight: spacing.sm },
-  goalTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  goalAmount: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  deadline: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  deadlineUrgent: { color: colors.danger, fontWeight: '600' },
-  remaining: { fontSize: 11, color: colors.primary, marginTop: 2, fontWeight: '500' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 
-  goalActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap', justifyContent: 'flex-end' },
-  completedBadge: { fontSize: 11, fontWeight: '700', color: colors.income, backgroundColor: colors.incomeLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.full },
-  timelineBtn: { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.primaryLight, borderRadius: radius.full },
-  timelineBtnText: { fontSize: 10, fontWeight: '600', color: colors.primary },
-  editBtn: {
-    flexDirection: 'row',
+  card: {
+    width: '47.5%',
+    borderRadius: 16,
+    padding: 12,
     alignItems: 'center',
     gap: 5,
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: radius.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  editBtnText: { fontSize: 12, fontWeight: '600', color: colors.primary },
 
-  progressBar: { height: 7, backgroundColor: colors.border, borderRadius: radius.full, overflow: 'hidden', marginBottom: 3 },
-  progressFill: { height: '100%', borderRadius: radius.full, backgroundColor: colors.primary },
-  progressComplete: { backgroundColor: colors.success },
-  pctLabel: { fontSize: 10, color: colors.textMuted, textAlign: 'right' },
-
-  // Timeline modal
-  overlayBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  timelineSheet: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: spacing.xxl,
-    paddingBottom: 40,
-    maxHeight: '85%',
+  ringWrap: { position: 'relative', width: 56, height: 56 },
+  ringIcon: {
+    position: 'absolute',
+    top: 9, left: 9, right: 9, bottom: 9,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sheetHandle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: spacing.md },
-  sheetCloseBtn: { position: 'absolute', top: spacing.lg, right: spacing.lg, padding: spacing.xs },
-  sheetTitle: { ...typography.h3, marginBottom: 4 },
-  sheetGoalName: { fontSize: 18, fontWeight: '800', color: colors.primary, marginBottom: 4 },
-  sheetRemaining: { fontSize: 13, color: colors.textSecondary, marginBottom: spacing.md },
+
+  cardName: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  cardPct:  { fontSize: 19, fontWeight: '800', lineHeight: 22 },
+  cardAmts: { fontSize: 11, textAlign: 'center', lineHeight: 16 },
+
+  deadlineBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
+  deadlineText:  { fontSize: 10, fontWeight: '700' },
+  doneBadge:  { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
+  doneText:   { fontSize: 10, fontWeight: '700' },
+
+  expanded: {
+    width: '100%', borderTopWidth: 1, paddingTop: 8, marginTop: 2,
+    gap: 6,
+  },
+  expandedAmt: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
+  expandedActions: {
+    flexDirection: 'row', justifyContent: 'center', gap: 6,
+  },
+  tlBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8,
+  },
+  tlBtnText: { fontSize: 11, fontWeight: '600' },
+  editBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8,
+  },
+  editBtnText: { fontSize: 11, fontWeight: '600' },
+
+  emptyCard: {
+    borderWidth: 1, borderRadius: 16, padding: 28,
+    alignItems: 'center', gap: 6, borderStyle: 'dashed',
+  },
+  emptyTitle: { fontSize: 13, fontWeight: '600' },
+  emptyHint:  { fontSize: 11, fontWeight: '600' },
+
+  // ── Timeline modal ──────────────────────────────────────────────────────────
+  overlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, paddingBottom: 40, maxHeight: '85%',
+  },
+  sheetHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    alignSelf: 'center', marginBottom: 16,
+  },
+  sheetClose: {
+    position: 'absolute', top: 20, right: 20, padding: 4,
+  },
+  sheetTitle:     { fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  sheetGoalName:  { fontSize: 18, fontWeight: '800', marginBottom: 4 },
+  sheetRemaining: { fontSize: 13, marginBottom: 14 },
 
   requiredBox: {
-    backgroundColor: colors.primaryLight,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    borderRadius: 12, padding: 12, marginBottom: 14,
     borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
   },
-  requiredLabel: { fontSize: 11, fontWeight: '700', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
-  requiredAmount: { fontSize: 22, fontWeight: '800', color: colors.primary },
-  requiredDeadline: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  requiredLabel:    { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
+  requiredAmt:      { fontSize: 22, fontWeight: '800' },
+  requiredDeadline: { fontSize: 12, marginTop: 2 },
 
-  tlSectionLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: spacing.sm },
+  tlLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 },
   tlRow: {
-    backgroundColor: colors.background,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    overflow: 'hidden',
+    borderRadius: 10, padding: 12, marginBottom: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden',
   },
-  tlLeft: { flex: 1 },
-  tlMonthly: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-  tlMonths: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  tlRight: { alignItems: 'flex-end' },
-  tlReach: { fontSize: 10, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.3 },
-  tlDate: { fontSize: 14, fontWeight: '700', color: colors.primary },
-  tlBarBg: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: colors.border },
-  tlBarFill: { height: '100%', backgroundColor: colors.primary, opacity: 0.4 },
+  tlLeft:    { flex: 1 },
+  tlMonthly: { fontSize: 15, fontWeight: '700' },
+  tlMonths:  { fontSize: 12, marginTop: 2 },
+  tlRight:   { alignItems: 'flex-end' },
+  tlReach:   { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.3 },
+  tlDate:    { fontSize: 14, fontWeight: '700' },
+  tlBarBg:   { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3 },
+  tlBarFill: { height: '100%', opacity: 0.4 },
 
-  sheetDoneBtn: { backgroundColor: colors.primary, borderRadius: radius.full, paddingVertical: spacing.md, alignItems: 'center', marginTop: spacing.sm },
-  sheetDoneBtnText: { color: colors.white, fontSize: 15, fontWeight: '700' },
+  doneBtn: {
+    borderRadius: 50, paddingVertical: 13, alignItems: 'center', marginTop: 12,
+  },
+  doneBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

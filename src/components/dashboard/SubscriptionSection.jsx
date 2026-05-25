@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { RefreshCw, Plus } from 'lucide-react-native';
 import { categoryConfig } from '../../lib/categoryConfig';
 import { colors, spacing, radius, shadow, typography } from '../../lib/theme';
+import CategoryIcon from '../common/CategoryIcon';
 
 function getNextRenewalLabel(nextRun, frequency) {
   if (!nextRun) return 'Unknown';
@@ -90,7 +91,6 @@ export default function SubscriptionSection({ recurringTransactions = [], onAdd 
         </View>
       ) : (
         sorted.map((sub) => {
-          const catIcon = categoryConfig[sub.category]?.icon || '📦';
           const catColor = categoryConfig[sub.category]?.color || colors.primary;
           const renewalLabel = getNextRenewalLabel(sub.next_run, sub.frequency);
           const urgencyColor = getUrgencyColor(sub.next_run);
@@ -98,7 +98,7 @@ export default function SubscriptionSection({ recurringTransactions = [], onAdd 
           return (
             <View key={sub.id} style={styles.subItem}>
               <View style={[styles.subIcon, { backgroundColor: catColor + '22' }]}>
-                <Text style={styles.subIconText}>{sub.emoji || catIcon}</Text>
+                <CategoryIcon category={sub.category} size={18} color={catColor} />
               </View>
               <View style={styles.subInfo}>
                 <Text style={styles.subName}>{sub.description || sub.category}</Text>
@@ -173,7 +173,6 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   subIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  subIconText: { fontSize: 19 },
   subInfo: { flex: 1 },
   subName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   subFreq: { fontSize: 11, color: colors.textMuted, marginTop: 1, textTransform: 'capitalize' },

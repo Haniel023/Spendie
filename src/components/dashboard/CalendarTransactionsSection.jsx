@@ -16,6 +16,7 @@ import { categoryConfig } from '../../lib/categoryConfig';
 import { useTheme } from '../../lib/ThemeContext';
 import { colors as sc, spacing, radius, shadow } from '../../lib/theme'; // sc = staticColors for StyleSheet
 import { toPHDate, getPHNow, toPHDateKey, formatPHTime } from '../../lib/timezone';
+import CategoryIcon from '../common/CategoryIcon';
 
 const DAYS   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -66,6 +67,7 @@ export default function CalendarTransactionsSection({
   selectedYear,
   onMonthChange,
   onAdd,
+  cardBalance,         // computed live balance of the selected card (null = no card selected)
   onRecurring,
   onEdit,
   onDelete,
@@ -152,14 +154,16 @@ export default function CalendarTransactionsSection({
             <Plus size={14} color={colors.primary} />
             <Text style={[styles.smallBtnText, { color: colors.primary }]}>Add</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.smallBtn, { borderColor: colors.border }]}
-            onPress={onRecurring}
-            activeOpacity={0.8}
-          >
-            <RefreshCw size={13} color={colors.textSecondary} />
-            <Text style={[styles.recurringBtnText, { color: colors.textSecondary }]}>Recurring</Text>
-          </TouchableOpacity>
+          {onRecurring && (
+            <TouchableOpacity
+              style={[styles.smallBtn, { borderColor: colors.border }]}
+              onPress={onRecurring}
+              activeOpacity={0.8}
+            >
+              <RefreshCw size={13} color={colors.textSecondary} />
+              <Text style={[styles.recurringBtnText, { color: colors.textSecondary }]}>Recurring</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -271,20 +275,48 @@ export default function CalendarTransactionsSection({
         </View>
       )}
 
-      {/* ── Summary row ──────────────────────────────────────────────────── */}
-      {(totalIncome > 0 || totalExpenses > 0) && (
-        <View style={styles.summaryRow}>
-          <View style={[styles.summaryChip, { backgroundColor: colors.incomeLight }]}>
-            <Text style={[styles.summaryLabel, { color: colors.income }]}>+₱{totalIncome.toFixed(2)}</Text>
+      {/* ── Summary row — display only ────────────────────────────────────── */}
+      {(() => {
+        // Balance chip: use actual card balance when a card is selected,
+        // otherwise fall back to the period's net (income − expenses)
+        const bal      = cardBalance !== null && cardBalance !== undefined
+          ? cardBalance
+          : (totalIncome - totalExpenses);
+        const balColor = bal >= 0 ? colors.income : colors.expense;
+        const balBg    = bal >= 0 ? colors.incomeLight : colors.expenseLight;
+        const balLabel = bal >= 0
+          ? `+₱${bal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+          : `-₱${Math.abs(bal).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+        const balSub   = cardBalance !== null && cardBalance !== undefined ? 'card balance' : 'balance';
+
+        return (
+          <View style={styles.summaryRow}>
+            {/* Card / period balance */}
+            <View style={[styles.summaryChip, { backgroundColor: balBg, flex: 1 }]}>
+              <Text style={[styles.summaryLabel, { color: balColor }]} numberOfLines={1}>
+                {balLabel}
+              </Text>
+              <Text style={[styles.summaryChipSub, { color: balColor }]}>{balSub}</Text>
+            </View>
+            {/* Expenses */}
+            <View style={[styles.summaryChip, { backgroundColor: colors.expenseLight, flex: 1 }]}>
+              <Text style={[styles.summaryLabel, { color: colors.expense }]} numberOfLines={1}>
+                -₱{totalExpenses.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+              </Text>
+              <Text style={[styles.summaryChipSub, { color: colors.expense }]}>spent</Text>
+            </View>
+            {/* Entry count */}
+            <View style={[styles.summaryChip, { backgroundColor: colors.primaryLight, flex: 1 }]}>
+              <Text style={[styles.summaryLabel, { color: colors.primary }]}>
+                {displayTransactions.length}
+              </Text>
+              <Text style={[styles.summaryChipSub, { color: colors.primary }]}>
+                {displayTransactions.length === 1 ? 'entry' : 'entries'}
+              </Text>
+            </View>
           </View>
-          <View style={[styles.summaryChip, { backgroundColor: colors.expenseLight }]}>
-            <Text style={[styles.summaryLabel, { color: colors.expense }]}>-₱{totalExpenses.toFixed(2)}</Text>
-          </View>
-          <View style={[styles.summaryChip, { backgroundColor: colors.primaryLight }]}>
-            <Text style={[styles.summaryLabel, { color: colors.primary }]}>{displayTransactions.length} entries</Text>
-          </View>
-        </View>
-      )}
+        );
+      })()}
 
       {/* ── Timeline ─────────────────────────────────────────────────────── */}
       {displayTransactions.length === 0 ? (
@@ -319,7 +351,6 @@ export default function CalendarTransactionsSection({
 
               {items.map((item, idx) => {
                 const catColor = categoryConfig[item.category]?.color || '#6b7280';
-                const catIcon  = categoryConfig[item.category]?.icon  || '✨';
                 const isLast   = idx === items.length - 1;
                 return (
                   <View key={item.id} style={[styles.timelineItem, isLast && styles.timelineItemLast]}>
@@ -329,7 +360,7 @@ export default function CalendarTransactionsSection({
                     </View>
                     <View style={styles.itemContent}>
                       <View style={[styles.catIcon, { backgroundColor: catColor + '22' }]}>
-                        <Text style={styles.catIconText}>{item.emoji || catIcon}</Text>
+                        <CategoryIcon category={item.category} size={15} color={catColor} />
                       </View>
                       <View style={styles.itemInfo}>
                         <Text style={[styles.category, { color: colors.textPrimary }]}>{item.category}</Text>
@@ -455,10 +486,18 @@ const styles = StyleSheet.create({
   // Summary
   summaryRow: {
     flexDirection: 'row', gap: spacing.xs,
-    marginBottom: spacing.sm, flexWrap: 'wrap',
+    marginBottom: spacing.sm,
   },
-  summaryChip: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.full },
-  summaryLabel: { fontSize: 12, fontWeight: '600' },
+  summaryChip: {
+    flex: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryLabel:   { fontSize: 12, fontWeight: '700', lineHeight: 16 },
+  summaryChipSub: { fontSize: 9,  fontWeight: '600', opacity: 0.65, lineHeight: 13 },
 
   // Empty state
   empty: { alignItems: 'center', paddingVertical: spacing.xl },
@@ -493,7 +532,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm, paddingVertical: spacing.xs, paddingLeft: spacing.sm,
   },
   catIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  catIconText: { fontSize: 17 },
   itemInfo: { flex: 1 },
   category: { fontSize: 13, fontWeight: '600' },
   desc: { fontSize: 11, marginTop: 1 },

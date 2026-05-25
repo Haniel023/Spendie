@@ -1,154 +1,177 @@
 /**
- * Premium Bottom Navigation
+ * BottomNavigation — floating glass pill with a raised center FAB
  *
- * Features:
- *   - Animated pill/blob active indicator
- *   - Glass-style background
- *   - Smooth label transitions
- *   - Active glow effect
+ * Layout:
+ *   [Home] [Log]  [ + FAB ]  [Plan] [Trends]
+ *
+ * Active indicator: primary-colored icon + small dot underneath (no text label).
+ * Center FAB: raised above the bar, theme-colored circle, context-aware action.
  */
 
-import { useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
-import { NAV_TABS } from '../../lib/constants';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Home, Receipt, Target, TrendingUp, Plus } from 'lucide-react-native';
 import { useTheme } from '../../lib/ThemeContext';
+import GlassView from './GlassView';
+
+const LEFT_TABS  = [
+  { id: 'overview',     iconName: 'Home',       Icon: Home     },
+  { id: 'transactions', iconName: 'Receipt',    Icon: Receipt  },
+];
+const RIGHT_TABS = [
+  { id: 'planning',     iconName: 'Target',     Icon: Target   },
+  { id: 'analytics',   iconName: 'TrendingUp', Icon: TrendingUp },
+];
+
+/** Detect whether a hex color is dark (luminance < 0.25) */
+function isHexDark(hex = '#ffffff') {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16) / 255;
+  const g = parseInt(h.substring(2, 4), 16) / 255;
+  const b = parseInt(h.substring(4, 6), 16) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.25;
+}
 
 function NavTab({ tab, active, onPress, colors }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const labelOpacity = useRef(new Animated.Value(active ? 1 : 0.6)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scale, {
-        toValue: active ? 1.1 : 1,
-        useNativeDriver: true,
-        tension: 80,
-        friction: 8,
-      }),
-      Animated.timing(labelOpacity, {
-        toValue: active ? 1 : 0.55,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [active]);
-
   return (
     <TouchableOpacity
       style={styles.tab}
       onPress={onPress}
       activeOpacity={0.7}
-      accessibilityLabel={tab.label}
+      accessibilityLabel={tab.id}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
     >
-      {/* Active background pill */}
-      {active && (
-        <Animated.View
-          style={[
-            styles.activePill,
-            { backgroundColor: colors.primaryLight },
-            { transform: [{ scale }] },
-          ]}
-        />
-      )}
-
-      {/* Icon */}
-      <Animated.Text style={[styles.icon, { transform: [{ scale }] }]}>
-        {tab.icon}
-      </Animated.Text>
-
-      {/* Label */}
-      <Animated.Text
-        style={[
-          styles.label,
-          { color: active ? colors.primary : colors.textMuted },
-          { opacity: labelOpacity },
-          active && styles.activeLabel,
-        ]}
-      >
-        {tab.mobileLabel}
-      </Animated.Text>
-
-      {/* Active dot */}
-      {active && (
-        <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
-      )}
+      <tab.Icon
+        size={22}
+        color={active ? colors.primary : colors.textMuted}
+        strokeWidth={active ? 2.5 : 1.8}
+      />
+      {/* Active dot indicator */}
+      <View style={[styles.dot, { backgroundColor: active ? colors.primary : 'transparent' }]} />
     </TouchableOpacity>
   );
 }
 
-export default function BottomNavigation({ activeTab, setActiveTab }) {
+export default function BottomNavigation({ activeTab, setActiveTab, onFloatingPress }) {
   const { colors } = useTheme();
+  const isDark = isHexDark(colors.background);
 
   return (
-    <View
-      style={[
-        styles.nav,
-        {
-          backgroundColor: colors.card,
-          borderTopColor: colors.border,
-          shadowColor: colors.primary,
-        },
-      ]}
-    >
-      {NAV_TABS.map((tab) => (
-        <NavTab
-          key={tab.id}
-          tab={tab}
-          active={activeTab === tab.id}
-          onPress={() => setActiveTab(tab.id)}
-          colors={colors}
-        />
-      ))}
+    <View style={styles.wrapper} pointerEvents="box-none">
+      {/* Glass pill bar */}
+      <GlassView
+        tint={isDark ? 'dark' : 'light'}
+        intensity={85}
+        showBorder
+        style={[
+          styles.bar,
+          {
+            borderColor: isDark
+              ? 'rgba(255,255,255,0.12)'
+              : 'rgba(255,255,255,0.6)',
+            shadowColor: isDark ? '#000' : colors.primary,
+          },
+        ]}
+      >
+        {/* Left tabs */}
+        {LEFT_TABS.map((tab) => (
+          <NavTab
+            key={tab.id}
+            tab={tab}
+            active={activeTab === tab.id}
+            onPress={() => setActiveTab(tab.id)}
+            colors={colors}
+          />
+        ))}
+
+        {/* Center placeholder so the FAB doesn't overlap tab icons */}
+        <View style={styles.fabGap} />
+
+        {/* Right tabs */}
+        {RIGHT_TABS.map((tab) => (
+          <NavTab
+            key={tab.id}
+            tab={tab}
+            active={activeTab === tab.id}
+            onPress={() => setActiveTab(tab.id)}
+            colors={colors}
+          />
+        ))}
+      </GlassView>
+
+      {/* Raised center FAB — floats above the bar */}
+      <TouchableOpacity
+        onPress={onFloatingPress}
+        activeOpacity={0.85}
+        style={[
+          styles.fab,
+          {
+            backgroundColor: colors.primary,
+            shadowColor: colors.primary,
+          },
+        ]}
+        accessibilityLabel="Add"
+        accessibilityRole="button"
+      >
+        <Plus size={26} color="#ffffff" strokeWidth={2.5} />
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  nav: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 10,
-    paddingTop: 8,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 12,
+  wrapper: {
+    position: 'absolute',
+    bottom: 20,
+    left: 16,
+    right: 16,
+    alignItems: 'center',   // centers the FAB horizontally
+    zIndex: 100,
   },
+
+  bar: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 32,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    elevation: 16,
+  },
+
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
     paddingVertical: 4,
-    gap: 3,
-    position: 'relative',
-    minHeight: 52,
   },
-  activePill: {
-    position: 'absolute',
-    top: 0,
-    left: 4,
-    right: 4,
-    bottom: 0,
-    borderRadius: 14,
-  },
-  icon: {
-    fontSize: 22,
-    lineHeight: 28,
-  },
-  label: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  activeLabel: {
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  activeDot: {
+  dot: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    marginTop: 1,
+  },
+
+  // Empty space in bar where the FAB sits
+  fabGap: {
+    width: 64,
+  },
+
+  // Raised FAB — sits above the bar center
+  fab: {
+    position: 'absolute',
+    bottom: 14,           // lifted above bar center
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 12,
   },
 });

@@ -1,7 +1,9 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, spacing, radius, shadow, typography } from '../../lib/theme';
+import { useTheme } from '../../lib/ThemeContext';
 
 export default function AnalyticsSummary({ transactions }) {
+  const { colors } = useTheme();
+
   const expenses = transactions.filter((i) => i.type === 'expense');
   const totalExpenses = expenses.reduce((s, i) => s + Number(i.amount), 0);
   const averageSpend = expenses.length > 0 ? totalExpenses / expenses.length : 0;
@@ -14,27 +16,27 @@ export default function AnalyticsSummary({ transactions }) {
 
   const widgets = [
     { icon: '💸', label: 'Total Expenses', value: `₱${totalExpenses.toFixed(2)}` },
-    { icon: '📊', label: 'Average Spend', value: `₱${averageSpend.toFixed(2)}` },
-    { icon: '🔥', label: 'Top Category', value: topCategory ? topCategory[0] : 'None' },
+    { icon: '📊', label: 'Average Spend',  value: `₱${averageSpend.toFixed(2)}`  },
+    { icon: '🔥', label: 'Top Category',   value: topCategory ? topCategory[0] : 'None' },
   ];
 
   return (
-    <View style={styles.grid}>
+    <View style={s.grid}>
       {widgets.map((w) => (
-        <View key={w.label} style={styles.widget}>
-          <Text style={styles.icon}>{w.icon}</Text>
-          <Text style={styles.label}>{w.label}</Text>
-          <Text style={styles.value}>{w.value}</Text>
+        <View key={w.label} style={[s.widget, { backgroundColor: colors.background }]}>
+          <Text style={s.icon}>{w.icon}</Text>
+          <Text style={[s.label, { color: colors.textSecondary }]}>{w.label}</Text>
+          <Text style={[s.value, { color: colors.textPrimary }]}>{w.value}</Text>
         </View>
       ))}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
-  widget: { flex: 1, backgroundColor: colors.background, borderRadius: radius.md, padding: spacing.md, alignItems: 'center', gap: 4 },
-  icon: { fontSize: 22 },
-  label: { fontSize: 10, color: colors.textSecondary, textAlign: 'center' },
-  value: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, textAlign: 'center' },
+const s = StyleSheet.create({
+  grid:   { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  widget: { flex: 1, borderRadius: 10, padding: 10, alignItems: 'center', gap: 4 },
+  icon:   { fontSize: 22 },
+  label:  { fontSize: 10, textAlign: 'center' },
+  value:  { fontSize: 13, fontWeight: '700', textAlign: 'center' },
 });

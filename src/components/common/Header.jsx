@@ -1,77 +1,100 @@
 /**
- * App Header — Premium redesign
+ * Header — greeting + settings + notification bell + user avatar
  *
- * Changes from original:
- *   - Theme emoji button → Settings gear (opens full Settings modal)
- *   - Compact, cleaner layout with better hierarchy
- *   - App name prominently on left, actions on right
+ * The user avatar replaces the bottom-nav profile tab.
+ * Tapping the avatar opens the profile tab.
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Settings, LogOut } from 'lucide-react-native';
+import { Settings, Sparkles } from 'lucide-react-native';
 import NotificationBell from './NotificationBell';
 import { useTheme } from '../../lib/ThemeContext';
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function getInitials(displayName = '') {
+  const parts = displayName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function getFirstName(displayName = '') {
+  return displayName.split(' ')[0] || displayName;
+}
+
 export default function Header({
   displayName,
+  transparent = false,
   notifications,
   showNotifications,
   setShowNotifications,
   markNotificationsAsRead,
-  onLogout,
   onSettingsOpen,
+  onProfileOpen,
+  // onLogout kept for back-compat but no longer shown in header
 }) {
-  const { colors, spacing, currentTheme } = useTheme();
+  const { colors } = useTheme();
+
+  const textColor = transparent ? '#ffffff'                   : colors.textPrimary;
+  const subColor  = transparent ? 'rgba(255,255,255,0.75)'   : colors.textSecondary;
+  const iconColor = transparent ? 'rgba(255,255,255,0.9)'    : colors.textSecondary;
+  const iconBg    = transparent ? 'rgba(255,255,255,0.18)'   : colors.primaryLight;
 
   return (
     <View
       style={[
         styles.header,
         {
-          backgroundColor: colors.primary,
-          paddingHorizontal: spacing.xl,
-          paddingTop: spacing.md,
-          paddingBottom: spacing.lg,
+          backgroundColor: transparent ? 'transparent' : colors.card,
+          borderBottomWidth: transparent ? 0 : 1,
+          borderBottomColor: colors.border,
         },
       ]}
     >
-      {/* Left: branding + greeting */}
+      {/* Left: brand + greeting */}
       <View style={styles.left}>
         <View style={styles.brandRow}>
-          <Text style={styles.brandEmoji}>{currentTheme.emoji}</Text>
-          <Text style={styles.brandName}>Spendie</Text>
+          <Sparkles size={11} color={subColor} strokeWidth={2.5} />
+          <Text style={[styles.brandName, { color: subColor }]}>SPENDIE</Text>
         </View>
-        <Text style={styles.greeting} numberOfLines={1}>
-          Hey, {displayName} 👋
+        <Text style={[styles.greeting, { color: textColor }]} numberOfLines={1}>
+          {getGreeting()}, {getFirstName(displayName)}!
         </Text>
       </View>
 
-      {/* Right: action buttons */}
+      {/* Right: settings + bell + avatar */}
       <View style={styles.actions}>
-        {/* Settings */}
         <TouchableOpacity
-          style={styles.iconBtn}
+          style={[styles.iconBtn, { backgroundColor: iconBg }]}
           onPress={onSettingsOpen}
           accessibilityLabel="Open settings"
         >
-          <Settings size={18} color="rgba(255,255,255,0.9)" />
+          <Settings size={17} color={iconColor} strokeWidth={2} />
         </TouchableOpacity>
 
-        {/* Notifications */}
         <NotificationBell
           notifications={notifications}
           showNotifications={showNotifications}
           setShowNotifications={setShowNotifications}
           markNotificationsAsRead={markNotificationsAsRead}
+          iconColor={iconColor}
+          iconBg={iconBg}
         />
 
-        {/* Logout */}
+        {/* User avatar — tapping opens profile tab */}
         <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={onLogout}
-          accessibilityLabel="Log out"
+          onPress={onProfileOpen}
+          activeOpacity={0.8}
+          style={[styles.avatar, { backgroundColor: colors.primary }]}
+          accessibilityLabel="Open profile"
         >
-          <LogOut size={18} color="rgba(255,255,255,0.9)" />
+          <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -83,8 +106,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 10,
   },
-
   left: {
     flex: 1,
     marginRight: 12,
@@ -92,37 +117,42 @@ const styles = StyleSheet.create({
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     marginBottom: 2,
   },
-  brandEmoji: {
-    fontSize: 14,
-  },
   brandName: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.65)',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    letterSpacing: 2,
   },
   greeting: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#ffffff',
     letterSpacing: -0.3,
   },
-
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 34,
+    height: 34,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: 0.5,
   },
 });

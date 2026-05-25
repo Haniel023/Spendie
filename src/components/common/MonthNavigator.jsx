@@ -16,12 +16,13 @@ export default function MonthNavigator({ month, year, onChange, variant = 'light
   const now = new Date();
   const isCurrentMonth = month === now.getMonth() && year === now.getFullYear();
 
-  const textColor = variant === 'light' ? 'rgba(255,255,255,0.9)' : colors.textPrimary;
-  const arrowBg  = variant === 'light' ? 'rgba(255,255,255,0.15)' : colors.primaryLight;
-  const arrowColor = variant === 'light' ? 'rgba(255,255,255,0.9)' : colors.primary;
-  const arrowDisabled = variant === 'light' ? 'rgba(255,255,255,0.3)' : colors.border;
-  const badgeBg  = variant === 'light' ? 'rgba(255,255,255,0.2)' : colors.primaryLight;
-  const badgeText = variant === 'light' ? 'rgba(255,255,255,0.9)' : colors.primary;
+  const textColor     = variant === 'light' ? 'rgba(255,255,255,0.9)'  : colors.textPrimary;
+  const arrowBg       = variant === 'light' ? 'rgba(255,255,255,0.15)' : colors.primaryLight;
+  const arrowBgDis    = variant === 'light' ? 'rgba(255,255,255,0.08)' : colors.border;
+  const arrowColor    = variant === 'light' ? 'rgba(255,255,255,0.9)'  : colors.primary;
+  const arrowDisabled = variant === 'light' ? 'rgba(255,255,255,0.3)'  : colors.textMuted;
+  const badgeBg       = variant === 'light' ? 'rgba(255,255,255,0.2)'  : colors.primaryLight;
+  const badgeText     = variant === 'light' ? 'rgba(255,255,255,0.9)'  : colors.primary;
 
   const goPrev = () => {
     if (month === 0) onChange(11, year - 1);
@@ -53,7 +54,7 @@ export default function MonthNavigator({ month, year, onChange, variant = 'light
 
       <TouchableOpacity
         onPress={goNext}
-        style={[styles.arrow, { backgroundColor: arrowBg }]}
+        style={[styles.arrow, { backgroundColor: isCurrentMonth ? arrowBgDis : arrowBg }]}
         disabled={isCurrentMonth}
       >
         <ChevronRight size={18} color={isCurrentMonth ? arrowDisabled : arrowColor} />
